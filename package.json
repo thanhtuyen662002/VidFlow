@@ -4,6 +4,7 @@
   "private": true,
   "description": "VidFlow (Video Flow): long-form AI video from a script with Google Flow, chained shots and CapCut export",
   "type": "module",
+  "bin": { "vidflow": "src/cli.ts" },
   "engines": {
     "node": ">=24"
   },
