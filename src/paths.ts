@@ -1,6 +1,15 @@
 import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
+
+export function resolveInside(directory: string, filename: string): string {
+  const destination = resolve(directory, filename);
+  const offset = relative(resolve(directory), destination);
+  if (!offset || offset === '..' || offset.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) || isAbsolute(offset)) {
+    throw new Error('Path must stay inside the project directory');
+  }
+  return destination;
+}
 
 export function dataDirectory(): string {
   return resolve(process.env.VIDFLOW_HOME || join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'VidFlow'));
