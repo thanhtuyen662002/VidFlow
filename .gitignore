@@ -1,0 +1,22 @@
+node_modules/
+dist/
+release/
+out/
+coverage/
+*.log
+
+# Runtime data never belongs in Git (see AGENTS.md)
+.vidflow/
+profiles/
+*.db
+*.db-journal
+*.sqlite
+*.mp4
+*.mov
+*.webm
+*.wav
+*.mp3
+*.m4a
+screenshots/
+.env
+.env.*
