@@ -104,6 +104,29 @@ CREATE TABLE selections(id TEXT PRIMARY KEY, scene_id TEXT NOT NULL REFERENCES s
 INSERT INTO selections(id,scene_id,take_id,"in","out",crop,exit_frame) SELECT id,scene_id,take_id,"in","out",crop,exit_frame FROM selections_legacy;
 DROP TABLE selections_legacy;
 CREATE UNIQUE INDEX selection_current ON selections(scene_id) WHERE is_current = 1;
+` }, { version: 3, name: 'Account, credit ledger and asset repositories', sql: `
+ALTER TABLE accounts ADD COLUMN provider TEXT NOT NULL DEFAULT 'flow';
+ALTER TABLE accounts ADD COLUMN secret_ref TEXT;
+ALTER TABLE accounts ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE accounts ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE credit_ledger ADD COLUMN delta INTEGER;
+ALTER TABLE credit_ledger ADD COLUMN reason TEXT NOT NULL DEFAULT '';
+ALTER TABLE credit_ledger ADD COLUMN ref_type TEXT;
+ALTER TABLE credit_ledger ADD COLUMN ref_id TEXT;
+UPDATE credit_ledger SET delta = -credits, reason = 'Legacy credit usage';
+CREATE INDEX ledger_project ON credit_ledger(project_id);
+CREATE INDEX ledger_account ON credit_ledger(account_id);
+CREATE TRIGGER account_ledger_delete BEFORE DELETE ON accounts
+WHEN EXISTS (SELECT 1 FROM credit_ledger WHERE account_id = OLD.id)
+BEGIN SELECT RAISE(ABORT, 'Account still has ledger entries'); END;
+ALTER TABLE assets ADD COLUMN kind TEXT NOT NULL DEFAULT '';
+ALTER TABLE assets ADD COLUMN rel_path TEXT NOT NULL DEFAULT '';
+ALTER TABLE assets ADD COLUMN mime TEXT;
+ALTER TABLE assets ADD COLUMN size_bytes INTEGER;
+ALTER TABLE assets ADD COLUMN sha256 TEXT;
+ALTER TABLE assets ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
+UPDATE assets SET kind = type, rel_path = file;
+CREATE UNIQUE INDEX asset_project_path ON assets(project_id, rel_path);
 ` }];
 
 export const latestVersion = migrations.at(-1)!.version;
