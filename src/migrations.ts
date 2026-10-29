@@ -70,6 +70,40 @@ CREATE TABLE assets (
   id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   type TEXT NOT NULL, file TEXT NOT NULL, metadata TEXT NOT NULL DEFAULT '{}'
 );
+` }, { version: 2, name: 'Script and render repositories', sql: `
+
+ALTER TABLE script_variants ADD COLUMN name TEXT NOT NULL DEFAULT '';
+ALTER TABLE script_variants ADD COLUMN content TEXT NOT NULL DEFAULT '';
+ALTER TABLE script_variants ADD COLUMN is_active INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE script_variants ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE script_variants ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX script_active ON script_variants(project_id) WHERE is_active = 1;
+ALTER TABLE scenes ADD COLUMN title TEXT NOT NULL DEFAULT '';
+ALTER TABLE scenes ADD COLUMN prompt TEXT NOT NULL DEFAULT '';
+ALTER TABLE scenes ADD COLUMN status TEXT NOT NULL DEFAULT 'draft';
+ALTER TABLE scenes ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE scenes ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
+-- Normalize legacy order before enforcing a unique slot, including unassigned scenes.
+WITH ranked AS MATERIALIZED (SELECT id, ROW_NUMBER() OVER (PARTITION BY project_id, script_variant_id ORDER BY "index", id)-1 AS position FROM scenes) UPDATE scenes SET "index" = (SELECT position FROM ranked WHERE ranked.id = scenes.id);
+CREATE UNIQUE INDEX scene_order ON scenes(project_id, IFNULL(script_variant_id, ''), "index");
+ALTER TABLE chains ADD COLUMN name TEXT NOT NULL DEFAULT '';
+ALTER TABLE chains ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
+CREATE TABLE chain_scenes(chain_id TEXT NOT NULL REFERENCES chains(id) ON DELETE CASCADE, scene_id TEXT NOT NULL REFERENCES scenes(id) ON DELETE CASCADE, position INTEGER NOT NULL, PRIMARY KEY(chain_id, scene_id), UNIQUE(chain_id, position));
+INSERT INTO chain_scenes SELECT chain_id, id, ROW_NUMBER() OVER (PARTITION BY chain_id ORDER BY "index", id)-1 FROM scenes WHERE chain_id IS NOT NULL;
+ALTER TABLE render_jobs ADD COLUMN provider TEXT NOT NULL DEFAULT 'flow';
+ALTER TABLE render_jobs ADD COLUMN params_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE render_jobs ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE render_jobs ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
+UPDATE render_jobs SET status = 'queued' WHERE status = 'pending';
+ALTER TABLE render_jobs ADD COLUMN status_valid INTEGER CHECK(status IN ('queued','running','succeeded','failed','cancelled'));
+ALTER TABLE takes ADD COLUMN asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL;
+ALTER TABLE takes ADD COLUMN duration_sec REAL NOT NULL DEFAULT 0;
+ALTER TABLE takes ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE selections RENAME TO selections_legacy;
+CREATE TABLE selections(id TEXT PRIMARY KEY, scene_id TEXT NOT NULL REFERENCES scenes(id) ON DELETE CASCADE, take_id TEXT NOT NULL REFERENCES takes(id) ON DELETE CASCADE, "in" REAL NOT NULL DEFAULT 0, "out" REAL NOT NULL, crop TEXT NOT NULL DEFAULT '{}', exit_frame TEXT, is_current INTEGER NOT NULL DEFAULT 1 CHECK(is_current IN (0,1)), created_at TEXT NOT NULL DEFAULT '');
+INSERT INTO selections(id,scene_id,take_id,"in","out",crop,exit_frame) SELECT id,scene_id,take_id,"in","out",crop,exit_frame FROM selections_legacy;
+DROP TABLE selections_legacy;
+CREATE UNIQUE INDEX selection_current ON selections(scene_id) WHERE is_current = 1;
 ` }];
 
 export const latestVersion = migrations.at(-1)!.version;

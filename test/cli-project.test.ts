@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import { migrations } from '../src/migrations.ts';
 import { run } from '../src/cli.ts';
 
 const cli = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
@@ -46,7 +47,7 @@ test('init, create, list, show and repeated migrations preserve project', t => {
   const db = new DatabaseSync(join(home, 'vidflow.db'));
   try {
     assert.equal(db.prepare('SELECT count(*) AS count FROM projects').get()!.count, 1);
-    assert.equal(db.prepare('SELECT count(*) AS count FROM migrations').get()!.count, 1);
+    assert.equal(db.prepare('SELECT count(*) AS count FROM migrations').get()!.count, migrations.length);
   } finally { db.close(); }
 });
 

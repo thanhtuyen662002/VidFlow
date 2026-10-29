@@ -42,12 +42,12 @@ test('upgrade keeps version 1 rows and records version 2 once', t => {
   const db = temporaryDatabase(t);
   migrate(db);
   db.exec(insertProject);
-  const list = [...migrations, { version: 2, name: 'Extra field', sql: 'ALTER TABLE projects ADD COLUMN notes TEXT' }];
+  const list = [...migrations, { version: latestVersion + 1, name: 'Extra field', sql: 'ALTER TABLE projects ADD COLUMN notes TEXT' }];
   migrate(db, list);
   assert.equal(db.prepare('SELECT name FROM projects').get()!.name, 'Project');
-  assert.equal(db.prepare('PRAGMA user_version').get()!.user_version, 2);
+  assert.equal(db.prepare('PRAGMA user_version').get()!.user_version, latestVersion + 1);
   migrate(db, list);
-  assert.equal(db.prepare('SELECT count(*) AS n FROM migrations').get()!.n, 2);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM migrations').get()!.n, migrations.length + 1);
 });
 
 test('future version reports database and code versions', t => {
@@ -61,11 +61,11 @@ test('failure rolls back schema, data, history and version together', t => {
   migrate(db);
   db.exec(insertProject);
   assert.throws(() => migrate(db, [...migrations, {
-    version: 2, name: 'Failure', sql: 'CREATE TABLE scratch (id TEXT); DELETE FROM projects; INVALID SQL;'
+    version: latestVersion + 1, name: 'Failure', sql: 'CREATE TABLE scratch (id TEXT); DELETE FROM projects; INVALID SQL;'
   }]));
   assert.equal(db.prepare('SELECT count(*) AS n FROM projects').get()!.n, 1);
-  assert.equal(db.prepare('PRAGMA user_version').get()!.user_version, 1);
-  assert.equal(db.prepare('SELECT count(*) AS n FROM migrations').get()!.n, 1);
+  assert.equal(db.prepare('PRAGMA user_version').get()!.user_version, latestVersion);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM migrations').get()!.n, migrations.length);
   assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE name = 'scratch'").get(), undefined);
 });
 
@@ -90,6 +90,6 @@ test('legacy migrations(version) and project data are preserved', t => {
   db.exec(insertProject);
   migrate(db);
   assert.equal(db.prepare('SELECT name FROM projects').get()!.name, 'Project');
-  assert.equal(db.prepare('SELECT count(*) AS n FROM migrations').get()!.n, 1);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM migrations').get()!.n, migrations.length);
   assert.equal(db.prepare('PRAGMA user_version').get()!.user_version, latestVersion);
 });
