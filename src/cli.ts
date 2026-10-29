@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { constants, copyFileSync, lstatSync, realpathSync, unlinkSync } from 'node:fs';
+import { constants, copyFileSync, lstatSync, unlinkSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { openDatabase } from './db.ts';
 import { createReference, findReferenceByName, listReferences } from './repo/references.ts';
 import { referenceFilename, referenceInput } from './validate.ts';
-import { dataDirectory, projectDirectory, resolveInside } from './paths.ts';
+import { createProjectDirectories, dataDirectory, resolveInside } from './paths.ts';
 import { createProject, findProject, listProjects } from './repo/projects.ts';
 import { projectAspect, projectBudget, projectName } from './validate.ts';
 import type { Project } from './repo/projects.ts';
@@ -61,10 +61,8 @@ export function run(argv: string[], io: IO = process): number {
         if (addRef) {
           const input = referenceInput(values);
           if (findReferenceByName(db, project.id, input.name)) throw new Error('Reference name already exists');
-          const directory = projectDirectory(project.id);
+          const directory = createProjectDirectories(project.id);
           const refs = resolveInside(directory, 'refs');
-          // Check the real directory too, preventing a redirected refs symlink.
-          resolveInside(realpathSync(directory), realpathSync(refs));
           const destination = resolveInside(refs, referenceFilename(basename(positionals[3])));
           // Exclusive copy: an existing destination is an error, never overwritten.
           copyFileSync(positionals[3], destination, constants.COPYFILE_EXCL);
