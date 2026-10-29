@@ -1,6 +1,8 @@
 ﻿import type { DatabaseSync } from 'node:sqlite';
 
-export interface Migration { version: number; name: string; sql: string }
+import { upgradeReferenceRegistry } from './reference-migration.ts';
+
+export interface Migration { version: number; name: string; sql: string; apply?: (db: DatabaseSync) => void }
 
 // Also supports callers supplying a raw SQLite connection with a projects table.
 export const referenceSchema = `CREATE TABLE IF NOT EXISTS "references" (
@@ -127,7 +129,7 @@ ALTER TABLE assets ADD COLUMN sha256 TEXT;
 ALTER TABLE assets ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
 UPDATE assets SET kind = type, rel_path = file;
 CREATE UNIQUE INDEX asset_project_path ON assets(project_id, rel_path);
-` }];
+` }, { version: 4, name: 'Single NFC reference registry', sql: '', apply: upgradeReferenceRegistry }];
 
 export const latestVersion = migrations.at(-1)!.version;
 
@@ -152,6 +154,7 @@ export function migrate(db: DatabaseSync, list: readonly Migration[] = migration
       if (migration.version > version) {
         // Version 1 also completes the legacy projects-only schema without losing its rows.
         db.exec(migration.sql);
+        migration.apply?.(db);
         db.prepare('INSERT OR REPLACE INTO migrations (version, name, applied_at) VALUES (?, ?, ?)')
           .run(migration.version, migration.name, new Date().toISOString());
         db.exec(`PRAGMA user_version = ${migration.version}`);

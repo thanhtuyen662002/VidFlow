@@ -73,10 +73,10 @@ test('reference shape, project-scoped uniqueness and cascade match the CLI contr
   const db = temporaryDatabase(t);
   migrate(db);
   db.exec(insertProject);
-  db.exec(`INSERT INTO "references" (id, project_id, name, role) VALUES ('r', 'p', 'Hero', 'character')`);
+  db.exec(`INSERT INTO "references" (id, project_id, name, role, name_key) VALUES ('r', 'p', 'Hero', 'character', 'Hero')`);
   assert.deepEqual(Object.keys(db.prepare('SELECT * FROM "references"').get()!),
-    ['id', 'project_id', 'name', 'role', 'images', 'description', 'priority']);
-  assert.throws(() => db.exec(`INSERT INTO "references" (id, project_id, name, role) VALUES ('s', 'p', 'Hero', 'character')`));
+    ['id', 'project_id', 'name', 'role', 'images', 'description', 'priority', 'name_key', 'name_conflict']);
+  assert.throws(() => db.exec(`INSERT INTO "references" (id, project_id, name, role, name_key) VALUES ('s', 'p', 'Hero', 'character', 'Hero')`));
   assert.throws(() => db.exec(`INSERT INTO "references" (id, project_id, name, role) VALUES ('s', 'missing', 'Other', 'character')`));
   db.exec("DELETE FROM projects WHERE id = 'p'");
   assert.equal(db.prepare('SELECT count(*) AS n FROM "references"').get()!.n, 0);

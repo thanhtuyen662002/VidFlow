@@ -24,7 +24,7 @@ export function referenceInput(values: Record<string, unknown>): { name: string;
     if (typeof values[flag] !== 'string') throw new Error(`Missing required --${flag}`);
   }
   const name = (values.name as string).trim();
-  if (!/^[\p{L}\p{N}_]+$/u.test(name)) throw new Error('Invalid reference name');
+  if (!/^[\p{L}_][\p{L}\p{M}\p{N}_]*$/u.test(name)) throw new Error('Invalid reference name');
   const role = values.role as string;
   if (!['character', 'location', 'prop', 'style'].includes(role)) throw new Error('Invalid --role: character, location, prop, style');
   const raw = values.priority as string;
