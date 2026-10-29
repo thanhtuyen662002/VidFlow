@@ -1,0 +1,26 @@
+{
+  "prompt": "Cinema\nSoft\nGreen\n35mm\nFilm grain: Cô gái Lan, Quiet park, Red cup; Cô gái Mai. Cô gái Lan! @Lan\nBlue coat\nWide\nWalk\nCenter\nNo text",
+  "references": [
+    {
+      "id": "b",
+      "name": "Mai",
+      "kind": "character",
+      "image": "refs/mai.png",
+      "priority": 2
+    },
+    {
+      "id": "a",
+      "name": "Lan",
+      "kind": "character",
+      "image": "refs/lan.png",
+      "priority": 1
+    },
+    {
+      "id": "l",
+      "name": "Park",
+      "kind": "location",
+      "image": "refs/park.png",
+      "priority": 0
+    }
+  ]
+}

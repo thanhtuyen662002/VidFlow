@@ -11,6 +11,12 @@ export { normalizeRefName } from '../ref-name.ts';
 export type BibleKind = 'character' | 'location' | 'prop' | 'style';
 export type BibleEntry = Reference & { kind: BibleKind };
 export type BibleEntryInput = { kind: BibleKind; name: string; images: string[]; description: string; priority: number };
+/** Lookup a canonical registry snapshot without accessing storage. */
+export function lookupBibleEntry(entries: readonly BibleEntry[], name: string): BibleEntry | undefined {
+  const key = normalizeRefName(name);
+  return entries.filter(value => normalizeRefName(value.name) === key)
+    .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)[0];
+}
 function entry(ref: Reference): BibleEntry {
   return { ...ref, kind: ref.role as BibleKind };
 }

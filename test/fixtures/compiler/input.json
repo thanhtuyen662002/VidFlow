@@ -1,0 +1,25 @@
+{
+  "scene": {
+    "prompt": "@Film: @Lan, @Park, @Cup; @Mai. @Lan! @@Lan",
+    "charactersPresent": ["Lan", "Mai"],
+    "location": "Park",
+    "camera": "Wide",
+    "action": "Walk",
+    "wardrobe": ["Blue coat"]
+  },
+  "bible": {
+    "style": "Cinema",
+    "lighting": "Soft",
+    "palette": "Green",
+    "lens": "35mm",
+    "safe_area": "Center",
+    "avoid": "No text",
+    "entries": [
+      { "id": "s", "project_id": "p", "name": "Film", "role": "style", "kind": "style", "images": ["refs/film.png"], "description": "Film grain", "priority": 100 },
+      { "id": "a", "project_id": "p", "name": "Lan", "role": "character", "kind": "character", "images": ["refs/lan.png", "refs/lan-side.png"], "description": "Cô gái Lan", "priority": 1 },
+      { "id": "l", "project_id": "p", "name": "Park", "role": "location", "kind": "location", "images": ["refs/park.png"], "description": "Quiet park", "priority": 0 },
+      { "id": "p", "project_id": "p", "name": "Cup", "role": "prop", "kind": "prop", "images": ["refs/cup.png"], "description": "Red cup", "priority": 99 },
+      { "id": "b", "project_id": "p", "name": "Mai", "role": "character", "kind": "character", "images": ["refs/mai.png"], "description": "Cô gái Mai", "priority": 2 }
+    ]
+  }
+}
