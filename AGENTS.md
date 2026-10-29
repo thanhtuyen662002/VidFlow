@@ -27,7 +27,10 @@ docs/decisions/  ghi lại quyết định kỹ thuật
   - import kiểu phải viết `import type`.
   - import file nội bộ phải có đuôi `.ts`, ví dụ `import { x } from './core/db.ts'`.
 - Cơ sở dữ liệu dùng `node:sqlite`. Không thêm dependency native.
-- Dependency mới phải có lý do rõ ràng và cố định phiên bản. Hiện chỉ dự kiến: Playwright (M5), Electron, Vite và React (M8).
+- **Dependency đã được cài sẵn và cố định phiên bản** trong `package.json` và `package-lock.json`: `playwright`, `react`, `react-dom` (chạy) và `electron`, `electron-builder`, `vite`, `@vitejs/plugin-react`, `jsdom` (phát triển).
+  - **Không** sửa `package.json` hay `package-lock.json` trong một task: coder không cài được gói mới, và Agent Forge cài đúng các gói đã khóa trước khi chạy test.
+  - Cần thêm gói thì báo `BLOCKED` và nêu tên gói cùng lý do.
+- Công cụ ngoài được tìm qua biến môi trường trước, rồi tới PATH: `VIDFLOW_FFMPEG`, `VIDFLOW_FFPROBE`. Trình duyệt của Playwright nằm ở `PLAYWRIGHT_BROWSERS_PATH` khi biến này được đặt (`npm ci` tự cài Chromium qua `postinstall`).
 - Gọi tiến trình ngoài (ffmpeg, CLI của LLM, …) bằng `execFile` hoặc `spawn` với tham số dạng mảng, **không bao giờ qua shell**, và luôn có thời gian chờ tối đa.
 
 ## Kiểm thử
