@@ -9,6 +9,7 @@ import { createProjectDirectories, dataDirectory, resolveInside } from './paths.
 import { createProject, findProject, listProjects } from './repo/projects.ts';
 import { projectAspect, projectBudget, projectName } from './validate.ts';
 import type { Project } from './repo/projects.ts';
+import { DuplicateError } from './types.ts';
 
 type IO = { stdout: Pick<NodeJS.WriteStream, 'write'>; stderr: Pick<NodeJS.WriteStream, 'write'> };
 const usage = `Usage: vidflow init
@@ -60,7 +61,7 @@ export function run(argv: string[], io: IO = process): number {
         if (!project) throw new Error('Project not found');
         if (addRef) {
           const input = referenceInput(values);
-          if (findReferenceByName(db, project.id, input.name)) throw new Error('Reference name already exists');
+          if (findReferenceByName(db, project.id, input.name)) throw new DuplicateError('Reference name already exists in this project');
           const directory = createProjectDirectories(project.id);
           const refs = resolveInside(directory, 'refs');
           const destination = resolveInside(refs, referenceFilename(basename(positionals[3])));

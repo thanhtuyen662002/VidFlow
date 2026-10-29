@@ -40,7 +40,26 @@ export function referenceFilename(filename: string): string {
   return safe;
 }
 import { statSync } from 'node:fs';
-import { extname, resolve } from 'node:path';
+import { extname, resolve, isAbsolute, relative } from 'node:path';
+import { resolveInside } from './paths.ts';
+
+export function referenceImages(value: unknown, directory?: string): string[] {
+  if (!Array.isArray(value) || !value.length) throw new ValidationError('images must be a non-empty array');
+  return value.map(image => {
+    if (typeof image !== 'string' || !image) throw new ValidationError('Invalid image path');
+    const path = directory && isAbsolute(image) ? relative(directory, image) : image;
+    if (directory) {
+      resolveInside(directory, path);
+      if (path.split(/[\\/]/)[0] !== 'refs') throw new ValidationError('Images must be inside refs/');
+    } else if (isAbsolute(path) || /^[a-z]:/i.test(path) || path.split(/[\\/]/).includes('..')) throw new ValidationError('Unsafe image path');
+    return path;
+  });
+}
+
+export function bibleText(value: unknown): string {
+  if (typeof value !== 'string' || /\x00/.test(value)) throw new ValidationError('Bible fields must be strings without NUL');
+  return value;
+}
 
 export const MAX_NAME_LENGTH = 100;
 export const MAX_ROLE_LENGTH = 100;

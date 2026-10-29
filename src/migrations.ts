@@ -2,6 +2,13 @@
 
 export interface Migration { version: number; name: string; sql: string }
 
+// Also supports callers supplying a raw SQLite connection with a projects table.
+export const referenceSchema = `CREATE TABLE IF NOT EXISTS "references" (
+  id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, role TEXT NOT NULL, images TEXT NOT NULL DEFAULT '[]',
+  description TEXT NOT NULL DEFAULT '', priority INTEGER NOT NULL DEFAULT 0, UNIQUE(project_id, name)
+)`;
+
 export const migrations: readonly Migration[] = [{
   version: 1, name: 'Initial schema', sql: `
 CREATE TABLE IF NOT EXISTS projects (
@@ -13,11 +20,7 @@ CREATE TABLE bibles (
   style TEXT NOT NULL DEFAULT '', lighting TEXT NOT NULL DEFAULT '', palette TEXT NOT NULL DEFAULT '',
   lens TEXT NOT NULL DEFAULT '', avoid TEXT NOT NULL DEFAULT '', safe_area TEXT NOT NULL DEFAULT ''
 );
-CREATE TABLE "references" (
-  id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  name TEXT NOT NULL, role TEXT NOT NULL, images TEXT NOT NULL DEFAULT '[]',
-  description TEXT NOT NULL DEFAULT '', priority INTEGER NOT NULL DEFAULT 0, UNIQUE(project_id, name)
-);
+${referenceSchema};
 CREATE TABLE script_variants (
   id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   logline TEXT NOT NULL DEFAULT '', audience TEXT NOT NULL DEFAULT '', value TEXT NOT NULL DEFAULT '',
