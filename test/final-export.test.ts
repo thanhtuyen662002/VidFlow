@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, relative } from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { temporaryDatabase } from './helpers.ts';
 import { detectFfmpeg } from './helpers/media.ts';
 import { migrate } from '../src/migrations.ts';
@@ -74,6 +74,14 @@ test('M7.3 export: both ratios, audio duration and -14 LUFS', { skip: !media.ava
     assert.ok(!relative(join(project.directory, 'exports'), result.path).startsWith('..'));
     assert.equal(await readFile(result.srtPath, 'utf8'), timelineSrt(input));
     assert.ok(Math.abs(loudness.integratedLufs + 14) <= 1);
+    assert.equal(result.capcutDraft.ok, true);
     t.diagnostic(`${aspect}: ffprobe ${info.width}x${info.height}, duration=${info.durationSec}s; ${loudness.integratedLufs} LUFS (input ${before.integratedLufs} LUFS)`);
   }
+  const failed = await exportFinal(input, { projectDir: project.directory, mixedAudioPath: mixed.path,
+    aspect: '16:9', timestamp: 'draftfailure', draftWriter: async () => { throw new Error('Injected draft failure'); } });
+  assert.ok((await stat(failed.path)).size > 0);
+  assert.equal(failed.capcutDraft.ok, false);
+  if (!failed.capcutDraft.ok) assert.match(failed.capcutDraft.error, /Injected draft failure/);
+  assert.match(failed.warnings.join('\n'), /Injected draft failure/);
+  assert.match(await readFile(join(process.env.VIDFLOW_HOME!, 'logs', 'vidflow.log'), 'utf8'), /Injected draft failure/);
 });

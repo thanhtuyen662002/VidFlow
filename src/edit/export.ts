@@ -8,6 +8,9 @@ import { segmentVideoFilter } from '../media/concat-segments.ts';
 import { normalize } from './audio.ts';
 import { timelineFps, timelineSrt, videoClips } from './subtitles.ts';
 import type { Timeline } from './timeline.ts';
+import { buildCapcutDraft, writeCapcutDraft } from './capcut.ts';
+import { createLogger } from '../logger.ts';
+import { redactString } from '../redact.ts';
 
 /** Two ffmpeg filter-parser escaping levels, including Windows drive colons. */
 export function escapeSubtitlePath(path: string): string {
@@ -16,6 +19,8 @@ export function escapeSubtitlePath(path: string): string {
 export interface FinalExportOptions {
   projectDir: string; mixedAudioPath: string; aspect: '16:9' | '9:16';
   outDir?: string; timestamp?: string; timeoutMs?: number;
+  /** Injection point for filesystem failures without changing the video pipeline. */
+  draftWriter?: typeof writeCapcutDraft;
 }
 /** Accepts the path returned by M7.2 mix(), preserving its licence checks. */
 export async function exportFinal(timeline: Timeline, options: FinalExportOptions) {
@@ -58,7 +63,21 @@ export async function exportFinal(timeline: Timeline, options: FinalExportOption
       '-t', String(endFrame / fps), '-af', `apad,atrim=duration=${endFrame / fps}`,
       '-c:v', 'libx264', '-preset', 'fast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '48000',
       '-movflags', '+faststart', output!], { ...context, inputPaths: [...inputs.slice(0, -1), audio], outputPath: path });
-    return { path, srtPath, width, height, loudness };
+    let capcutDraft: { ok: true; path: string } | { ok: false; error: string };
+    const warnings: string[] = [];
+    try {
+      const draft = buildCapcutDraft(timeline, { projectDir, aspect: options.aspect });
+      const draftPath = await (options.draftWriter ?? writeCapcutDraft)(draft,
+        resolveInside(outDir, `${options.aspect.replace(':', 'x')}/capcut_draft`), { projectDir });
+      capcutDraft = { ok: true, path: draftPath };
+    } catch (error) {
+      const message = redactString(error instanceof Error ? error.message : String(error));
+      capcutDraft = { ok: false, error: message };
+      warnings.push(`CapCut draft: ${message}`);
+      // A logging failure must never invalidate the completed MP4 either.
+      try { createLogger().warn('CapCut draft failed', { error: message, timelineId: timeline.id }); } catch {}
+    }
+    return { path, srtPath, width, height, loudness, capcutDraft, warnings };
   } catch (error) {
     await unlink(path).catch(() => {});
     if (wroteSrt) await unlink(srtPath).catch(() => {});
