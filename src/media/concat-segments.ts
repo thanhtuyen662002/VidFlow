@@ -21,6 +21,10 @@ export interface ConcatSegmentsOptions {
 function invalid(message: string): never {
   throw new MediaInputError('MEDIA_INVALID_SEGMENTS', message);
 }
+/** Shared trim and normalization graph for preview and final export. */
+export function segmentVideoFilter(index: number, start: number, end: number, fps: number, width: number, height: number, crop = false): string {
+  return `[${index}:v:0]trim=start=${start}:end=${end},setpts=PTS-STARTPTS,fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=${crop ? 'increase' : 'decrease'},${crop ? `crop=${width}:${height}` : `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`},setsar=1,format=yuv420p[v${index}]`;
+}
 
 /** Accurate cuts and normalized MP4 output; originals are never modified. */
 export async function concatSegments(projectDir: string, segments: readonly MediaSegment[], options: ConcatSegmentsOptions = {}) {
@@ -64,7 +68,7 @@ export async function concatSegments(projectDir: string, segments: readonly Medi
   const filters: string[] = [];
   segments.forEach((segment, i) => {
     const duration = ends[i] - segment.in;
-    filters.push(`[${i}:v:0]trim=start=${segment.in}:end=${ends[i]},setpts=PTS-STARTPTS,fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p[v${i}]`);
+    filters.push(segmentVideoFilter(i, segment.in, ends[i], fps, width, height));
     const audio = infos[i].hasAudio
       ? `[${i}:a:0]atrim=start=${segment.in}:end=${ends[i]},asetpts=PTS-STARTPTS`
       : `anullsrc=r=${rate}:cl=${layout},atrim=duration=${duration},asetpts=PTS-STARTPTS`;

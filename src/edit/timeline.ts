@@ -27,10 +27,12 @@ export type TimelineClip = {
   id: string; trackId: string; sceneId: string | null; takeId: string | null;
   sourceAssetId: string | null; sourcePath: string; inPoint: number; outPoint: number;
   timelineStart: number; duration: number; order: number;
+  /** Source-relative seconds, before trimming. Optional for older snapshots. */
+  dialogueLines?: { text: string; start: number; end: number }[];
 };
 export type TimelineSubtitle = { id: string; trackId: string; sceneId: string; text: string; start: number; end: number; order: number };
 export type TimelineTrack = { id: string; timelineId: string; kind: 'video' | 'dialogue' | 'music' | 'subtitle'; order: number; muted: boolean; clips: TimelineClip[]; subtitles: TimelineSubtitle[] };
-export type Timeline = { id: string; projectId: string; createdAt: string; revision: number; status: string; tracks: TimelineTrack[] };
+export type Timeline = { id: string; projectId: string; createdAt: string; revision: number; status: string; tracks: TimelineTrack[]; fps?: number };
 
 export function getTimeline(db: DatabaseSync, id: string): Timeline | undefined {
   const row = db.prepare('SELECT id,project_id AS projectId,created_at AS createdAt,revision,status FROM timeline WHERE id=?').get(id);
