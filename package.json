@@ -14,9 +14,9 @@
   "scripts": {
     "test": "node --test",
     "build:renderer": "vite build",
-    "build:main": "vite build --config vite.main.config.ts",
+    "build:main": "vite build --config config/vite.main.config.ts",
     "build": "npm run build:renderer && npm run build:main",
-    "package:win": "npm run build && electron-builder --win nsis --x64 --config electron-builder.yml",
+    "package:win": "npm run build && electron-builder --win nsis --x64 --config config/electron-builder.yml",
     "postinstall": "playwright install chromium"
   },
   "license": "UNLICENSED",
