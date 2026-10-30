@@ -4,12 +4,15 @@ import type { LlmClient } from './llm/types.ts';
 import type { JsonSchema } from './llm/schema.ts';
 import { validateSchema } from './llm/schema.ts';
 import { generateValidated } from './llm/generate.ts';
+import { LlmValidationExhaustedError } from './llm/errors.ts';
 import { getProject } from '../repo/projects.ts';
 import { createScriptVariant, getScriptVariant, listScriptVariants, updateScriptVariant } from '../repo/scripts.ts';
 import { createScriptReview } from '../repo/script-reviews.ts';
 import { transaction } from '../repo/records.ts';
 import { loadSystemPrompt } from './prompts.ts';
 import { checkDialogueLength } from './dialogue.ts';
+export { revise, reviewRisks, overrideWarning, approve, acceptRevision, ScriptGateError } from './gate.ts';
+export type { RiskWarning } from './gate.ts';
 
 const text: JsonSchema = { type: 'string', minLength: 1 };
 const index: JsonSchema = { type: 'integer', minimum: 1 };
@@ -27,9 +30,9 @@ const reviewSchema: JsonSchema = { type: 'object', additionalProperties: false,
         sceneIndex: index, type: text, severity: { type: 'string', enum: ['info', 'warning', 'error'] }, message: text,
       } } },
   } };
-type Dependencies = { db: DatabaseSync; llm: LlmClient; promptsDir?: string; maxAttempts?: number };
+export type Dependencies = { db: DatabaseSync; llm: LlmClient; promptsDir?: string; maxAttempts?: number };
 
-function validateScenes(scenes: unknown): asserts scenes is ScriptScene[] {
+export function validateScenes(scenes: unknown): asserts scenes is ScriptScene[] {
   if (!validateSchema(scenes, scriptScenesSchema).valid) throw new Error('Invalid script scenes');
   const indices = (scenes as ScriptScene[]).map(scene => scene.sceneIndex);
   if (new Set(indices).size !== indices.length) throw new Error('Duplicate sceneIndex');
@@ -86,17 +89,9 @@ export async function scoreVariants(options: Dependencies & {
       return variant;
     });
   variants.forEach(variant => validateScenes(variant.scenes));
-  const system = await loadSystemPrompt('script-editor', options);
   const pending: { variant: ScriptVariant; review: { score: number; comment: string; issues: ScriptIssue[] } }[] = [];
   for (const variant of variants) {
-    const { value } = await generateValidated<{ score: number; comment: string; issues: ScriptIssue[] }>({
-      llm: options.llm, maxAttempts: options.maxAttempts, system,
-      prompt: JSON.stringify({ variant, schema: reviewSchema }), schema: reviewSchema,
-    });
-    const scenes = variant.scenes as ScriptScene[];
-    if (value.issues.some(issue => !scenes.some(scene => scene.sceneIndex === issue.sceneIndex))) throw new Error('Review references an unknown scene');
-    const issues = scenes.map(scene => checkDialogueLength(scene, options)).filter((issue): issue is ScriptIssue => issue !== undefined);
-    pending.push({ variant, review: { ...value, issues: [...value.issues, ...issues] } });
+    pending.push({ variant, review: await evaluateVariant(options, variant) });
   }
   return transaction(options.db, () => pending.map(({ variant, review }) => {
     // An asynchronous LLM request must not attach a review to content edited in the meantime.
@@ -105,4 +100,17 @@ export async function scoreVariants(options: Dependencies & {
     updateScriptVariant(options.db, variant.id, { status: 'scored', scores: { overall: review.score }, feedback: review.comment });
     return saved;
   }));
+}
+
+export async function evaluateVariant(options: Dependencies & { wordsPerSecond?: number }, variant: ScriptVariant) {
+    const system = await loadSystemPrompt('script-editor', options);
+    const { value } = await generateValidated<{ score: number; comment: string; issues: ScriptIssue[] }>({
+      llm: options.llm, maxAttempts: options.maxAttempts, system,
+      prompt: JSON.stringify({ variant, schema: reviewSchema }), schema: reviewSchema,
+    });
+    const scenes = variant.scenes as ScriptScene[];
+    if (value.issues.some(issue => !scenes.some(scene => scene.sceneIndex === issue.sceneIndex)))
+      throw new LlmValidationExhaustedError(1, [{ path: '$.issues', message: 'Nhận xét tham chiếu cảnh không tồn tại.' }]);
+    const issues = scenes.map(scene => checkDialogueLength(scene, options)).filter((issue): issue is ScriptIssue => issue !== undefined);
+    return { ...value, issues: [...value.issues, ...issues] };
 }

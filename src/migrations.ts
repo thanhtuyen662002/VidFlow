@@ -138,6 +138,12 @@ CREATE TABLE script_reviews (
  issues TEXT NOT NULL DEFAULT '[]', reviewer_model TEXT NOT NULL, created_at TEXT NOT NULL
 );
 CREATE INDEX script_reviews_variant ON script_reviews(variant_id, created_at);
+` }, { version: 6, name: 'Script owner decisions and risk reviews', sql: `
+CREATE TABLE script_decisions (
+ id TEXT PRIMARY KEY, variant_id TEXT NOT NULL REFERENCES script_variants(id) ON DELETE CASCADE,
+ kind TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX script_decisions_variant ON script_decisions(variant_id);
 ` }];
 
 export const latestVersion = migrations.at(-1)!.version;
