@@ -20,3 +20,12 @@ profiles/
 screenshots/
 .env
 .env.*
+!.env.example
+**/profiles/
+evidence/
+**/evidence/
+**/screenshots/
+*.har
+*.cookies.json
+storage-state*.json
+VidFlow/

@@ -35,6 +35,23 @@ export function dataDirectory(): string {
   return resolve(process.env.VIDFLOW_HOME || (process.env.APPDATA ? join(process.env.APPDATA, 'VidFlow') : join(homedir(), '.vidflow')));
 }
 
+function runtimeDirectory(part: string): string {
+  const directory = resolveInside(dataDirectory(), part);
+  mkdirSync(directory, { recursive: true });
+  return directory;
+}
+export function getProfilesDir(): string { return runtimeDirectory('profiles'); }
+export function getEvidenceDir(): string { return runtimeDirectory('evidence'); }
+export function getRunEvidenceDir(runId: string): string {
+  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(runId)) throw new Error('Invalid evidence run ID');
+  return runtimeDirectory(`evidence/${runId}`);
+}
+export function getScreenshotsDir(runId: string): string {
+  const directory = resolveInside(getRunEvidenceDir(runId), 'screenshots');
+  mkdirSync(directory, { recursive: true });
+  return directory;
+}
+
 export function initializeDirectories(): string {
   const home = dataDirectory();
   for (const part of ['', 'profiles', 'projects']) mkdirSync(join(home, part), { recursive: true });

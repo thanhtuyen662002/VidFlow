@@ -1,6 +1,7 @@
+import { redactString } from '../redact.ts';
 /** Redact diagnostics before retaining or exposing them. */
 export function redactSensitive(text: string): string {
-  return text
+  return redactString(text)
     .replace(/\b((?:set-cookie|cookie|authorization)\s*:\s*)[^\r\n]*/gi, '$1[REDACTED]')
     .replace(/\bBearer\s+[^\s"']+/gi, 'Bearer [REDACTED]')
     .replace(/\b(token|access_token|key|sig|signature|session)\s*=\s*[^\s&;"']+/gi, '$1=[REDACTED]')
