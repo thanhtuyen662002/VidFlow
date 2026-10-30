@@ -146,7 +146,27 @@ CREATE TABLE script_decisions (
 );
 CREATE INDEX script_decisions_variant ON script_decisions(variant_id);
 ` }, { version: 7, name: 'Flow accounts, append-only credits and atomic queue', sql: '', apply: upgradeFlowQueue },
-{ version: 8, name: 'Flow worker media references', sql: 'ALTER TABLE render_jobs ADD COLUMN output_media TEXT CHECK(output_media IS NULL OR json_valid(output_media));' }];
+{ version: 8, name: 'Flow worker media references', sql: 'ALTER TABLE render_jobs ADD COLUMN output_media TEXT CHECK(output_media IS NULL OR json_valid(output_media));' },
+{ version: 9, name: 'Persistent render plans', sql: `
+CREATE TABLE render_plans (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL, input_hash TEXT NOT NULL,
+ status TEXT NOT NULL, estimated_credits INTEGER NOT NULL, created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL, UNIQUE(project_id, input_hash)
+);
+CREATE TABLE render_plan_steps (
+ id TEXT PRIMARY KEY, plan_id TEXT NOT NULL REFERENCES render_plans(id) ON DELETE CASCADE,
+ scene_id TEXT NOT NULL, chain_id TEXT NOT NULL, chain_index INTEGER NOT NULL,
+ depends_on_step_id TEXT REFERENCES render_plan_steps(id), compiled_prompt TEXT NOT NULL,
+ estimated_credits INTEGER NOT NULL, status TEXT NOT NULL, updated_at TEXT NOT NULL,
+ UNIQUE(plan_id, scene_id)
+);
+CREATE TABLE render_plan_events (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, plan_id TEXT NOT NULL, step_id TEXT,
+ from_status TEXT, to_status TEXT NOT NULL, at TEXT NOT NULL
+);
+CREATE INDEX render_steps_plan ON render_plan_steps(plan_id);
+CREATE INDEX render_events_plan ON render_plan_events(plan_id);
+` }];
 
 export const latestVersion = migrations.at(-1)!.version;
 
