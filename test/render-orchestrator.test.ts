@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setImmediate } from 'node:timers/promises';
 import { join } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { temporaryDatabase } from './helpers.ts';
 import { migrate } from '../src/migrations.ts';
 import { createScene } from '../src/repo/scenes.ts';
@@ -35,6 +36,9 @@ function fixture(t: TestContext) {
 
 test('two account Flow fake overlaps chains and settles five scenes sequentially with two takes', async t => {
   const { db, plan } = fixture(t);
+  const frame = join(process.env.VIDFLOW_HOME!, 'projects/p/frames/exit.png');
+  mkdirSync(join(process.env.VIDFLOW_HOME!, 'projects/p/frames'), { recursive: true });
+  writeFileSync(frame, 'injected frame');
   let tick = 0, active = 0, peak = 0;
   const accountActive = new Set<string>();
   const jobs: { chain: string; scene: string; start: number; end: number; account: string }[] = [];
@@ -74,6 +78,9 @@ test('two account Flow fake overlaps chains and settles five scenes sequentially
     }
   }
   assert.equal(frames.length, 3);
+  const savedFrames = db.prepare('SELECT * FROM scene_start_frames').all();
+  assert.equal(savedFrames.length, 3);
+  assert.ok(savedFrames.every(row => row.effective_time_sec === null && typeof row.sha256 === 'string'));
   assert.ok(getRenderPlan(db, plan.id)!.steps.every(s => s.status === 'done'));
   assert.equal(exportSelections(db, plan.id).length, 5);
   for (const step of plan.steps) {

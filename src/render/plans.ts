@@ -96,7 +96,8 @@ export function buildRenderPlan(db: DatabaseSync, projectId: string,
       chain.scenes.forEach((scene, index) => {
         const stepId = randomUUID();
         const status = previous === null ? 'ready' : 'pending';
-        db.prepare('INSERT INTO render_plan_steps VALUES (?,?,?,?,?,?,?,?,?,?)')
+        db.prepare(`INSERT INTO render_plan_steps(id,plan_id,scene_id,chain_id,chain_index,
+          depends_on_step_id,compiled_prompt,estimated_credits,status,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
           .run(stepId, id, scene.sceneId, chain.chainId, index, previous, scene.compiledPrompt,
             scene.estimatedCredits, status, now);
         event(db, id, stepId, null, status, now);
@@ -116,9 +117,11 @@ export function transitionStep(db: DatabaseSync, stepId: string, toStatus: Rende
     if (!step) throw new Error('Render step not found');
     const allowed: Record<RenderStepStatus, readonly RenderStepStatus[]> = {
       pending: ['ready', 'skipped'], ready: ['running', 'skipped'],
-      running: ['done', 'failed'], failed: ['ready', 'skipped'], done: [], skipped: [],
+      running: ['done', 'failed'], failed: ['ready', 'skipped'], done: ['ready'], skipped: [],
     };
     if (!allowed[step.status]?.includes(toStatus)) throw new Error(`Invalid transition ${step.status} -> ${toStatus}`);
+    if (step.status === 'done' && !db.prepare('SELECT needs_rerender FROM render_plan_steps WHERE id=?').get(stepId)?.needs_rerender)
+      throw new Error(`Invalid transition ${step.status} -> ${toStatus}`);
     if (step.dependsOnStepId && db.prepare('SELECT status FROM render_plan_steps WHERE id=?')
       .get(step.dependsOnStepId)?.status !== 'done') throw new Error('Dependency is not done');
     const now = new Date().toISOString();

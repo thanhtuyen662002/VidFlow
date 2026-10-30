@@ -166,6 +166,28 @@ CREATE TABLE render_plan_events (
 );
 CREATE INDEX render_steps_plan ON render_plan_steps(plan_id);
 CREATE INDEX render_events_plan ON render_plan_events(plan_id);
+` }, { version: 10, name: 'Continue scene frame chain', sql: `
+CREATE TABLE scene_start_frames (
+ id TEXT PRIMARY KEY, step_id TEXT NOT NULL REFERENCES render_plan_steps(id),
+ source_take_id TEXT NOT NULL REFERENCES takes(id), out_point REAL NOT NULL,
+ file TEXT NOT NULL, sha256 TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX start_frames_step ON scene_start_frames(step_id, created_at);
+ALTER TABLE render_plan_steps ADD COLUMN needs_rerender INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE render_override_history (
+ id TEXT PRIMARY KEY, step_id TEXT NOT NULL, owner_override TEXT NOT NULL, created_at TEXT NOT NULL
+);
+` }, { version: 11, name: 'Effective exit frame time and override integrity', sql: `
+ALTER TABLE scene_start_frames ADD COLUMN effective_time_sec REAL;
+CREATE TABLE render_override_history_new (
+ id TEXT PRIMARY KEY, step_id TEXT NOT NULL REFERENCES render_plan_steps(id),
+ owner_override TEXT NOT NULL, created_at TEXT NOT NULL
+);
+-- Old plans may have been removed before history had a foreign key.
+DELETE FROM render_override_history WHERE step_id NOT IN (SELECT id FROM render_plan_steps);
+INSERT INTO render_override_history_new SELECT * FROM render_override_history;
+DROP TABLE render_override_history;
+ALTER TABLE render_override_history_new RENAME TO render_override_history;
 ` }];
 
 export const latestVersion = migrations.at(-1)!.version;

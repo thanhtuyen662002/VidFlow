@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FlowJobDriver, WorkerJob } from '../flow/jobDriver.ts';
 import { enqueueJob, claimNextJob, completeJob, failJob, rejectJob } from '../flow/queue.ts';
@@ -14,6 +15,7 @@ import { getRenderPlan, transitionStep } from './plans.ts';
 import type { RenderPlanStep } from './plans.ts';
 import type { LlmClient } from '../script/llm/types.ts';
 import { generateValidated } from '../script/llm/generate.ts';
+import { buildStartFrame, markNextFrameDirty, saveStartFrame } from './frameChain.ts';
 
 export type ReviewTake = { id: string; file: string; duration: number; startedAt: string; finishedAt: string };
 export type TakeSelection = { takeId: string; inPoint: number; outPoint: number };
@@ -23,9 +25,10 @@ export interface TakeReviewer { review(scene: ReviewScene, takes: readonly Revie
 
 /** The only selection merge point, shared by exports and frame chaining. */
 export function resolveSelection(scene: ReviewScene): TakeSelection {
-  const takeId = scene.override?.takeId ?? scene.suggestion?.takeId;
-  const inPoint = scene.override?.inPoint ?? scene.suggestion?.inPoint;
-  const outPoint = scene.override?.outPoint ?? scene.suggestion?.outPoint;
+  const fallback = scene.override ? scene.takes.find(t => t.id === scene.override?.takeId) ?? scene.takes[0] : undefined;
+  const takeId = scene.override?.takeId ?? scene.suggestion?.takeId ?? fallback?.id;
+  const inPoint = scene.override?.inPoint ?? scene.suggestion?.inPoint ?? (fallback ? 0 : undefined);
+  const outPoint = scene.override?.outPoint ?? scene.suggestion?.outPoint ?? fallback?.duration;
   const take = scene.takes.find(t => t.id === takeId);
   if (!take) throw new Error('Selected takeId must belong to the scene');
   if (!Number.isFinite(inPoint) || !Number.isFinite(outPoint) || inPoint! < 0 || inPoint! >= outPoint! || outPoint! > take.duration)
@@ -89,7 +92,8 @@ export async function runRenderPlan(options: {
   db: DatabaseSync; planId: string; driver: FlowJobDriver; reviewer: TakeReviewer; takesPerScene?: number;
   clock?: () => Date; timeoutMs?: number;
   duration: (file: string) => Promise<number>;
-  exitFrame: (scene: ReviewScene, selection: TakeSelection) => Promise<string>;
+  /** For tests and injection only; production uses the M3 frame chain. */
+  exitFrame?: (scene: ReviewScene, selection: TakeSelection) => Promise<string>;
 }): Promise<void> {
   const { db } = options;
   initializeRenderReviews(db);
@@ -103,19 +107,30 @@ export async function runRenderPlan(options: {
   const projectRoot = assertInsideDataDir(String(project?.directory), dataDirectory());
   const accounts = listAccounts(db, { status: 'ready' }).filter(a => getBalance(db, String(a.id)) > 0 &&
     !db.prepare("SELECT id FROM render_jobs WHERE account_id=? AND status='running'").get(a.id));
-  if (!accounts.length && plan.steps.some(s => s.status !== 'done')) throw new Error('No available Flow account');
+  if (!accounts.length && plan.steps.some(s => s.status !== 'done' || db.prepare('SELECT needs_rerender FROM render_plan_steps WHERE id=?').get(s.id)?.needs_rerender)) throw new Error('No available Flow account');
   const chains = [...new Set(plan.steps.map(s => s.chainId))].map(id => plan.steps.filter(s => s.chainId === id));
   let next = 0;
   let stopped = false;
   async function runStep(step: RenderPlanStep, accountId: string) {
-    if (step.status === 'done') return;
+    const dirty = db.prepare('SELECT needs_rerender FROM render_plan_steps WHERE id=?').get(step.id)?.needs_rerender;
+    if (step.status === 'done' && !dirty) return;
+    if (step.status === 'done') transitionStep(db, step.id, 'ready');
     if (step.status === 'pending' || step.status === 'failed') transitionStep(db, step.id, 'ready');
     transitionStep(db, step.id, 'running');
     try {
       let inputImages: string[] = [];
-      if (step.dependsOnStepId) {
+      if (step.dependsOnStepId && (options.exitFrame || getScene(db, step.sceneId)?.transition === 'continue')) {
         const previous = getReviewScene(db, step.dependsOnStepId);
-        inputImages = [assertInsideDataDir(await options.exitFrame(previous, resolveSelection(previous)), projectRoot)];
+        const selected = resolveSelection(previous);
+        if (options.exitFrame) {
+          const path = assertInsideDataDir(await options.exitFrame(previous, selected), projectRoot);
+          const sha256 = createHash('sha256').update(await readFile(path)).digest('hex');
+          transaction(db, () => {
+            markNextFrameDirty(db, step.dependsOnStepId!, selected);
+            saveStartFrame(db, step.id, selected, { path, sha256, effectiveTime: null });
+          });
+          inputImages = [path];
+        } else inputImages = [await buildStartFrame(db, step.id)];
       }
       for (let index = 0; index < count; index++) {
         if (stopped) throw new Error('Render stopped');
@@ -162,6 +177,7 @@ export async function runRenderPlan(options: {
       db.prepare(`INSERT INTO render_reviews(step_id,scene_id,suggestion) VALUES (?,?,?)
         ON CONFLICT(step_id) DO UPDATE SET suggestion=excluded.suggestion`).run(step.id, step.sceneId, JSON.stringify(suggestion));
       transitionStep(db, step.id, 'done');
+      db.prepare('UPDATE render_plan_steps SET needs_rerender=0 WHERE id=?').run(step.id);
     } catch (error) { transitionStep(db, step.id, 'failed'); stopped = true; throw error; }
   }
   const results = await Promise.allSettled(accounts.map(async account => {

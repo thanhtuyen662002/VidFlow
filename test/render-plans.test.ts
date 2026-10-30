@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { temporaryDatabase } from './helpers.ts';
-import { migrate } from '../src/migrations.ts';
+import { latestVersion, migrate } from '../src/migrations.ts';
 import { createScene, updateScene } from '../src/repo/scenes.ts';
 import { createChain, addScene } from '../src/repo/chains.ts';
 import { setBible } from '../src/repo/bibles.ts';
@@ -97,7 +97,7 @@ test('transitions are durable and invalid transitions leave rows and events unch
 test('migration v9 is recorded once on a fresh database', t => {
   const db = temporaryDatabase(t);
   migrate(db);
-  assert.equal(db.prepare('PRAGMA user_version').get()!.user_version, 9);
+  assert.equal(db.prepare('PRAGMA user_version').get()!.user_version, latestVersion);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM migrations WHERE version=9').get()!.n, 1);
   migrate(db);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM migrations WHERE version=9').get()!.n, 1);
