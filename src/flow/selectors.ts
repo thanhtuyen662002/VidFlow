@@ -5,6 +5,13 @@ import { dataDirectory, resolveInside } from '../paths.ts';
 export type SelectorProfile = 'mock' | 'real';
 export type Selectors = Record<string, { selector: string; note?: string }>;
 export const defaultConfig = new URL('../../config/flow-selectors.json', import.meta.url);
+// Shared detection rules for the mock and real profiles. Real DOM selectors still need calibration.
+export const flowPatterns = {
+  verificationSelector: 'iframe[src*="captcha" i], iframe[title*="captcha" i], iframe[src*="challenge" i]',
+  verification: /verify (?:you are human|it's you)|unusual traffic|sign.in challenge|verification required/i,
+  noCredit: /out of credits|insufficient credits|no credits/i,
+  rejected: /reject|policy|not allowed/i,
+};
 const required = ["promptInput","submitButton","modelSelect","aspectRatioSelect","referenceUpload","generateButton","progressIndicator","resultVideo","downloadButton","creditCounter","errorBanner","accountMenu","login-email","login-submit","prompt-input","image-input","generate-button","credit-balance","job-item","job-status","video-result","download-link","error-banner","verify-challenge","verify-clear","prompt-textarea-v2","generate-button-v2"];
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 

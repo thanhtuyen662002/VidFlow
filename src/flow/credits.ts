@@ -15,3 +15,16 @@ export function getBalance(db: DatabaseSync, accountId: string): number {
 export function listEntries(db: DatabaseSync, accountId: string) {
   return db.prepare('SELECT * FROM credit_ledger WHERE account_id=? AND amount IS NOT NULL ORDER BY created_at,id').all(accountId);
 }
+
+/** The queue job ID is the idempotency key; serialize the check and append. */
+export function chargeJob(db: DatabaseSync, accountId: string, jobId: string, credits: number) {
+  if (!Number.isSafeInteger(credits) || credits < 0) throw new Error('Invalid charge');
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const previous = db.prepare('SELECT * FROM credit_ledger WHERE job_id=? AND amount IS NOT NULL').get(jobId);
+    if (previous && previous.account_id !== accountId) throw new Error('Job already charged to another account');
+    const entry = previous ?? addEntry(db, { accountId, jobId, amount: -credits, reason: 'Flow generation' });
+    db.exec('COMMIT');
+    return entry;
+  } catch (error) { db.exec('ROLLBACK'); throw error; }
+}

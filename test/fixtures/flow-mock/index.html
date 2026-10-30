@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8">
+<span data-testid="credit-balance">100</span>
+<textarea data-testid="prompt-input"></textarea><input type="file" data-testid="image-input">
+<button data-testid="generate-button">Generate</button>
+<p data-testid="error-banner" hidden></p><p data-testid="job-status"></p>
+<div data-testid="verify-challenge" hidden>Verify you are human</div>
+<a data-testid="download-link" hidden download="result.mp4" href="/result.mp4">Download</a>
+<script>
+const scenario = new URLSearchParams(location.search).get('scenario');
+const el = name => document.querySelector(`[data-testid="${name}"]`);
+if (scenario === 'verification') el('verify-challenge').hidden = false;
+el('generate-button').onclick = () => {
+  el('job-status').textContent = 'running';
+  setTimeout(() => {
+    if (scenario === 'verification_after') { el('verify-challenge').hidden = false; return; }
+    if (scenario === 'rejected' || scenario === 'no_credit') {
+      el('error-banner').textContent = scenario === 'rejected' ? 'Prompt rejected by policy: unsafe content' : 'Out of credits';
+      el('error-banner').hidden = false; return;
+    }
+    el('credit-balance').textContent = '90'; el('job-status').textContent = 'done';
+    el('download-link').hidden = false;
+  }, 80);
+};
+</script>
