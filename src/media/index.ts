@@ -6,3 +6,4 @@ export * from './runner.ts';
 export * from './probe.ts';
 export * from './extract-frame.ts';
 export * from './crop-logo.ts';
+export * from './concat-segments.ts';
