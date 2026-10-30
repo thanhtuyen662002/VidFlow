@@ -1,6 +1,7 @@
 ﻿import type { DatabaseSync } from 'node:sqlite';
 
 import { upgradeReferenceRegistry } from './reference-migration.ts';
+import { upgradeFlowQueue } from './flow/queue-migration.ts';
 
 export interface Migration { version: number; name: string; sql: string; apply?: (db: DatabaseSync) => void }
 
@@ -144,7 +145,7 @@ CREATE TABLE script_decisions (
  kind TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL
 );
 CREATE INDEX script_decisions_variant ON script_decisions(variant_id);
-` }];
+` }, { version: 7, name: 'Flow accounts, append-only credits and atomic queue', sql: '', apply: upgradeFlowQueue }];
 
 export const latestVersion = migrations.at(-1)!.version;
 
