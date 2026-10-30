@@ -129,7 +129,16 @@ ALTER TABLE assets ADD COLUMN sha256 TEXT;
 ALTER TABLE assets ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
 UPDATE assets SET kind = type, rel_path = file;
 CREATE UNIQUE INDEX asset_project_path ON assets(project_id, rel_path);
-` }, { version: 4, name: 'Single NFC reference registry', sql: '', apply: upgradeReferenceRegistry }];
+` }, { version: 4, name: 'Single NFC reference registry', sql: '', apply: upgradeReferenceRegistry }, { version: 5, name: 'Script versions and reviews', sql: `
+ALTER TABLE script_variants ADD COLUMN version_number INTEGER NOT NULL DEFAULT 1 CHECK(version_number > 0);
+ALTER TABLE script_variants ADD COLUMN parent_variant_id TEXT REFERENCES script_variants(id) ON DELETE SET NULL;
+CREATE TABLE script_reviews (
+ id TEXT PRIMARY KEY, variant_id TEXT NOT NULL REFERENCES script_variants(id) ON DELETE CASCADE,
+ score REAL NOT NULL CHECK(score >= 0 AND score <= 10), comment TEXT NOT NULL,
+ issues TEXT NOT NULL DEFAULT '[]', reviewer_model TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX script_reviews_variant ON script_reviews(variant_id, created_at);
+` }];
 
 export const latestVersion = migrations.at(-1)!.version;
 
@@ -166,3 +175,4 @@ export function migrate(db: DatabaseSync, list: readonly Migration[] = migration
     }
   }
 }
+

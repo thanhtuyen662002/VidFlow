@@ -1,7 +1,7 @@
-import type { DatabaseSync } from 'node:sqlite';
+﻿import type { DatabaseSync } from 'node:sqlite';
 import type { ScriptVariant } from '../types.ts';
 import { repository, transaction } from './records.ts';
-const scriptVariantRepo = repository<ScriptVariant>('script_variants', {"projectId":"","name":"","content":"","isActive":false,"logline":"","audience":"","value":"","beats":[],"scenes":[],"scores":{},"feedback":"","status":"draft","createdAt":"","updatedAt":""}, ["beats","scenes","scores"], ["isActive"]);
+const scriptVariantRepo = repository<ScriptVariant>('script_variants', {"versionNumber":1,"parentVariantId":null,"projectId":"","name":"","content":"","isActive":false,"logline":"","audience":"","value":"","beats":[],"scenes":[],"scores":{},"feedback":"","status":"draft","createdAt":"","updatedAt":""}, ["beats","scenes","scores"], ["isActive"]);
 export const getScriptVariant = scriptVariantRepo.get;
 export const updateScriptVariant = scriptVariantRepo.update;
 export const deleteScriptVariant = scriptVariantRepo.remove;
@@ -16,3 +16,4 @@ export function setActive(db: DatabaseSync, id: string): ScriptVariant | undefin
 export const listByProject = listScriptVariants;
 
 export const setActiveScriptVariant = setActive;
+

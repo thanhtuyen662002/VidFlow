@@ -10,7 +10,11 @@ export class DuplicateError extends Error {
 }
 
 export type RenderJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
-export type ScriptVariant = { id: string; projectId: string; name: string; content: string; isActive: boolean; logline: string; audience: string; value: string; beats: unknown[]; scenes: unknown[]; scores: Record<string, unknown>; feedback: string; status: string; createdAt: string; updatedAt: string };
+export type ScriptStatus = 'draft' | 'scored' | 'approved' | 'rejected';
+export type ScriptScene = { sceneIndex: number; durationSec: number; description: string; dialogue: { speaker: string; text: string }[] };
+export type ScriptIssue = { sceneIndex: number; type: string; severity: 'info' | 'warning' | 'error'; message: string };
+export type ScriptReview = { id: string; variantId: string; score: number; comment: string; issues: ScriptIssue[]; reviewerModel: string; createdAt: string };
+export type ScriptVariant = { id: string; projectId: string; versionNumber: number; parentVariantId: string | null; name: string; content: string; isActive: boolean; logline: string; audience: string; value: string; beats: unknown[]; scenes: unknown[]; scores: Record<string, unknown>; feedback: string; status: ScriptStatus; createdAt: string; updatedAt: string };
 export type Scene = { id: string; projectId: string; scriptVariantId: string | null; chainId: string | null; index: number; title: string; prompt: string; status: string; beat: string; durationUsed: number; moment: string; camera: string; action: string; dialogue: string; sfx: string; charactersPresent: string[]; location: string; transition: 'continue' | 'cut'; groupId: string | null; mode: 'frames' | 'image-to-video' | 'text'; createdAt: string; updatedAt: string };
 export type Chain = { id: string; projectId: string; scriptVariantId: string | null; name: string; status: string; createdAt: string };
 export type RenderJob = { id: string; projectId: string; sceneId: string; accountId: string | null; provider: string; type: string; model: string; prompt: string; inputImages: string[]; status: RenderJobStatus; credits: number; error: string | null; attempts: number; paramsJson: Record<string, unknown>; createdAt: string; updatedAt: string };
