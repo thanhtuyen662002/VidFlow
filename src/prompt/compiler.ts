@@ -55,6 +55,22 @@ const range = (segment: GroupSegment): string => `${time(segment.start)}–${tim
 // Shared layout for every merged segment, with LF separators independent of platform.
 const GROUP_SEGMENT_TEMPLATE = (segment: GroupSegment, prompt: string): string => `${range(segment)}\n${prompt}`;
 
+/** Select the requested render unit without compiling unrelated scenes. */
+export function compileSceneUnit(
+  scenes: readonly GroupCompilerScene[], sceneId: string, bible: CompilerBible, options: CompileOptions,
+): CompiledScene | CompiledGroup {
+  const index = scenes.findIndex(scene => scene.id === sceneId);
+  if (index < 0) throw new Error(`Không tìm thấy cảnh: ${sceneId}`);
+  let start = index;
+  let end = index + 1;
+  const groupId = scenes[index].groupId;
+  if (groupId) {
+    while (start > 0 && scenes[start - 1].groupId === groupId) start--;
+    while (end < scenes.length && scenes[end].groupId === groupId) end++;
+  }
+  return compileScenes(scenes.slice(start, end), bible, options)[0];
+}
+
 /** Only adjacent nonempty group ids merge. Singletons retain the exact M2.3 result. */
 export function compileScenes(
   scenes: readonly GroupCompilerScene[], bible: CompilerBible, options: CompileOptions,

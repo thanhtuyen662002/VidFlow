@@ -11,11 +11,16 @@ import { projectAspect, projectBudget, projectName } from './validate.ts';
 import type { Project } from './repo/projects.ts';
 import { BibleDuplicateError } from './prompt/bible-errors.ts';
 import { normalizeRefName } from './ref-name.ts';
+import { getScene, listScenes } from './repo/scenes.ts';
+import { getBible } from './repo/bibles.ts';
+import { BibleService, UnregisteredReferenceError } from './prompt/bible.ts';
+import { compileSceneUnit } from './prompt/compiler.ts';
 
 type IO = { stdout: Pick<NodeJS.WriteStream, 'write'>; stderr: Pick<NodeJS.WriteStream, 'write'> };
 const usage = `Usage: vidflow init
        vidflow project create <name> --aspect <W:H> [--budget N]
        vidflow project list
+       vidflow scene compile <project> <scene>
        vidflow project show <id|name>
        vidflow ref add <project> <image> --name <n> --role <character|location|prop|style> --description <d> --priority <integer>
        vidflow ref list <project> (priority ascending, then name)
@@ -35,9 +40,11 @@ export function run(argv: string[], io: IO = process): number {
     const { positionals, values } = parseArgs({ args: argv, allowPositionals: true, strict: true,
       options: { ...(addRef ? { name: { type: 'string' as const }, role: { type: 'string' as const }, description: { type: 'string' as const }, priority: { type: 'string' as const } } : {}), help: { type: 'boolean' }, ...(create ? { aspect: { type: 'string' as const }, budget: { type: 'string' as const } } : {}) } });
     if (!command || values.help) { io.stdout.write(usage); return 0; }
-    if (command !== 'init' && command !== 'project' && command !== 'ref') throw new Error('Lệnh không hợp lệ');
+    if (command !== 'init' && command !== 'project' && command !== 'ref' && command !== 'scene') throw new Error('Lệnh không hợp lệ');
     let input: { name: string; aspect: string; budget: number | null } | undefined;
-    if (command === 'ref') {
+    if (command === 'scene') {
+      if (action !== 'compile' || positionals.length !== 4) throw new Error('Cần scene compile <project> <scene>');
+    } else if (command === 'ref') {
       if ((addRef && positionals.length !== 4) || (action === 'list' && positionals.length !== 3) || (!addRef && action !== 'list')) throw new Error('Usage: ref add <project> <image> --name --role --description --priority | ref list <project>');
       if (addRef) {
         referenceInput(values);
@@ -57,7 +64,17 @@ export function run(argv: string[], io: IO = process): number {
     usageError = false;
     const db = openDatabase();
     try {
-      if (command === 'ref') {
+      if (command === 'scene') {
+        const project = findProject(db, positionals[2]);
+        if (!project) throw new Error('Không tìm thấy dự án: ' + positionals[2]);
+        const scene = getScene(db, positionals[3]);
+        if (!scene || scene.projectId !== project.id) throw new Error('Không tìm thấy cảnh trong dự án: ' + positionals[3]);
+        const bible = getBible(db, project.id);
+        if (!bible) throw new Error('Không tìm thấy Bible của dự án: ' + project.name);
+        const compiled = compileSceneUnit(listScenes(db, project.id, scene.scriptVariantId), scene.id,
+          { ...bible, entries: new BibleService(db).list(project.id) }, { maxReferenceImages: 3 });
+        io.stdout.write([compiled.prompt, ...compiled.references.map(ref => ref.image)].join('\n') + '\n');
+      } else if (command === 'ref') {
         const project = findProject(db, positionals[2]);
         if (!project) throw new Error('Project not found');
         if (addRef) {
@@ -94,6 +111,10 @@ export function run(argv: string[], io: IO = process): number {
     } finally { db.close(); }
     return 0;
   } catch (error) {
+    if (error instanceof UnregisteredReferenceError) {
+      io.stderr.write('vidflow: Tham chiếu @' + error.name + ' chưa đăng ký (' + error.line + ':' + error.column + ', offset ' + error.offset + ')\n');
+      return 1;
+    }
     io.stderr.write(`vidflow: ${error instanceof Error ? error.message : String(error)}\n`);
     return usageError ? 2 : 1;
   }
