@@ -320,6 +320,7 @@ Mỗi mốc là **một dự án Agent Forge** (một hợp đồng trong `docs/
 | M7 | Âm thanh, dựng, draft CapCut, nhiều tỉ lệ, gói xuất bản | M3, M6 |
 | M8 | Giao diện Electron và máy chủ MCP | M1–M7 |
 | M9 | Học từ kết quả, mẫu series, lưu trữ và sao lưu, đóng gói bộ cài | M8 |
+| M10 | Motion control: làm lại video gốc với nhân vật, bối cảnh hoặc phong cách khác (mục 16) | M3–M8 |
 
 M2, M3 và M5 không phụ thuộc nhau, nên có thể chạy song song thành các dự án Agent Forge riêng.
 
@@ -332,3 +333,62 @@ M2, M3 và M5 không phụ thuộc nhau, nên có thể chạy song song thành 
 - Logo Flow: **cắt ra ngoài khung**, không xóa hay làm mờ; nội dung luôn được khai báo là AI.
 - Kịch bản và storyboard phải được duyệt trước khi render video.
 - Làm đủ mọi phần trong bản kế hoạch này; đây là dự án thử sức Agent Forge.
+
+---
+
+## 16. Motion control (làm lại video gốc)
+
+**Mục đích.** Từ một video gốc cộng với ảnh tham chiếu, ra video mới **giữ chuyển động, nhịp và bố cục** của video gốc, nhưng:
+- thay nhân vật bằng `@NhanVat` của thư viện;
+- thay bối cảnh bằng `@BoiCanh`;
+- hoặc đổi cả phong cách. Ví dụ: video nấu ăn làm lại thành hoạt hình **không lộ mặt** (chỉ thấy tay, dụng cụ, món ăn), hoặc thành phim hoạt hình với một nhân vật hoạt hình khác.
+
+**Luồng:**
+
+1. **Nhập.**
+   - Nhập video gốc; chủ sở hữu xác nhận có quyền sử dụng.
+   - Gương mặt người thật chỉ được giữ khi có đồng ý.
+   - Âm thanh gốc được giữ riêng.
+2. **Tách đoạn.**
+   - Phát hiện điểm cắt cảnh.
+   - Chia thành các đoạn vừa một lượt của Flow (mặc định ≤ 8 giây), cắt ở chỗ ít chuyển động.
+3. **Phân tích.**
+   - LLM có thị giác mô tả từng đoạn: chủ thể, hành động, máy quay, bối cảnh.
+   - Kết quả là danh sách chủ thể xuyên suốt video.
+4. **Ánh xạ.**
+   - Mỗi chủ thể được gán `@Ten`, "giữ nguyên" hoặc "không lộ mặt".
+   - Chọn bối cảnh, và chọn **preset phong cách** trong file cấu hình.
+5. **Biên dịch lệnh biến đổi** cho từng đoạn. Ghép theo thứ tự Bible, preset, ánh xạ, rồi những gì phải giữ (chuyển động, thời lượng, góc máy), rồi điều cần tránh. Lệnh có tính xác định, giống mục 4.
+6. **Duyệt phong cách** (cổng duyệt):
+   - biến đổi vài khung hình chính bằng model ảnh (rẻ);
+   - so sánh cạnh nhau với khung gốc;
+   - ước tính credit;
+   - chủ sở hữu duyệt rồi mới render video.
+7. **Render từng đoạn** qua hàng đợi và nhóm tài khoản của mục 11:
+   - **Chỉnh sửa video:** tải đoạn gốc lên chế độ chỉnh sửa video bằng hội thoại của Flow (Gemini Omni Flash), kèm ảnh tham chiếu và lệnh.
+   - **Dự phòng:** biến đổi khung đầu và khung cuối, rồi Veo "Frames to Video" với prompt mô tả đúng chuyển động.
+   - Mỗi đoạn K bản. Đoạn sau trong cùng cảnh nhận khung hình cuối (đã cắt logo) của đoạn trước, để nhân vật và màu không nhảy.
+8. **Soát hình** với khung gốc và khung mới cạnh nhau. Chấm khớp chuyển động, đúng nhân vật, nhất quán giữa các đoạn, đúng phong cách, không lộ mặt khi được yêu cầu.
+9. **Dựng lại theo thời gian gốc.**
+   - Cắt và co giãn từng đoạn cho khớp `in`/`out` gốc, để âm thanh gốc, lời thoại và phụ đề vẫn khớp.
+   - Âm thanh: giữ âm thanh gốc, thay bằng lồng tiếng hoặc nhạc của mục 9, hoặc trộn cả hai.
+10. **Xuất** như mục 10. Luôn khai báo nội dung AI.
+
+**Công cụ MCP:**
+- `import_source_video`
+- `analyze_source`
+- `map_subjects`
+- `set_motion_preset`
+- `preview_motion_style`
+- `approve_motion_style`
+- `start_motion_render`
+- `motion_status`
+- `assemble_motion`
+
+**Ràng buộc.** Mọi quy tắc ở mục 1 vẫn giữ:
+- không vượt chống bot;
+- chỉ cắt logo ra ngoài khung, không xóa dấu AI;
+- không dùng nhân vật hay thương hiệu có bản quyền;
+- không deepfake người thật khi chưa có đồng ý.
+
+Chi tiết hợp đồng nằm ở `docs/milestones/M10.md`.
