@@ -1,3 +1,4 @@
+import { createProgressSource } from './progress.ts';
 ﻿import type { DatabaseSync } from 'node:sqlite';
 import type { LlmClient } from '../script/llm/types.ts';
 import type { FlowJobDriver } from '../flow/jobDriver.ts';
@@ -74,6 +75,16 @@ const storyboardSchema = object({ id: text, projectId: text, variantId: text, pl
 const takeSchema = output({ id: text, sceneId: text, renderJobId: text, file: text, durationSec: num, selected: { type: 'boolean' }, metadata: { type: 'object' } });
 export function createCoreService(deps: ServiceDependencies) {
   const { db } = deps;
+  const progress = createProgressSource();
+  const progressDriver: FlowJobDriver = { async run(job, account, ctx) {
+    const event = (status: string) => progress.emit({ jobId: job.id, status, timestamp: (deps.clock?.() ?? new Date()).toISOString() });
+    event('running');
+    try {
+      const result = await deps.flowDriver.run(job, account, ctx);
+      event(result.kind === 'success' ? 'completed' : result.kind === 'verification_required' ? 'needs_owner' : 'failed');
+      return result;
+    } catch (error) { event('failed'); throw error; }
+  } };
   initializeStoryboards(db);
   const secrets = new Set(deps.sensitiveValues ?? []);
   const registry = new Map<string, { name: string; inputSchema: JsonSchema; outputSchema: JsonSchema; handler: (input: unknown) => unknown | Promise<unknown> }>();
@@ -115,7 +126,7 @@ export function createCoreService(deps: ServiceDependencies) {
   register<{ planId: string; storyboardId: string; takesPerScene?: number }>('render.run', object({ planId: text, storyboardId: text, takesPerScene: integer }, ['planId','storyboardId']), planSchema, async i => {
     const plan = approvedStoryboardPlan(db, board(i.storyboardId));
     if (plan.id !== i.planId) throw new ServiceError('PRECONDITION_FAILED', 'Storyboard does not approve this plan');
-    await runRenderPlan({ db, planId: i.planId, driver: deps.flowDriver, reviewer: deps.reviewer ?? createLlmTakeReviewer(deps.llm),
+    await runRenderPlan({ db, planId: i.planId, driver: progressDriver, reviewer: deps.reviewer ?? createLlmTakeReviewer(deps.llm),
       takesPerScene: i.takesPerScene, clock: deps.clock, exitFrame: deps.exitFrame,
       duration: deps.duration ?? (async file => (await probe(file)).durationSec) });
     return need(getRenderPlan(db, i.planId));
@@ -198,6 +209,7 @@ export function createCoreService(deps: ServiceDependencies) {
     },
   };
   return {
+    onRenderProgress: progress.onRenderProgress,
     listCommands: service.listCommands,
     async execute(name: string, input: unknown): Promise<ServiceResult> {
       return sanitize(await service.execute(name, input), [...secrets]) as ServiceResult;
