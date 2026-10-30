@@ -16,6 +16,7 @@ import type { RenderPlanStep } from './plans.ts';
 import type { LlmClient } from '../script/llm/types.ts';
 import { generateValidated } from '../script/llm/generate.ts';
 import { buildStartFrame, markNextFrameDirty, saveStartFrame } from './frameChain.ts';
+import { canDispatch, AWAITING_BUDGET_APPROVAL } from './budget.ts';
 
 export type ReviewTake = { id: string; file: string; duration: number; startedAt: string; finishedAt: string };
 export type TakeSelection = { takeId: string; inPoint: number; outPoint: number };
@@ -97,7 +98,8 @@ export async function runRenderPlan(options: {
 }): Promise<void> {
   const { db } = options;
   initializeRenderReviews(db);
-  const count = options.takesPerScene ?? 2;
+  const approvedRework = db.prepare("SELECT takes_per_scene FROM render_rework_requests WHERE plan_id=? AND state='accepted' ORDER BY created_at DESC LIMIT 1").get(options.planId);
+  const count = approvedRework ? Number(approvedRework.takes_per_scene) : options.takesPerScene ?? 2;
   const timeoutMs = options.timeoutMs ?? 30000;
   if (!Number.isSafeInteger(count) || count < 1 || !Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('Invalid render limits');
   const now = () => (options.clock?.() ?? new Date()).toISOString();
@@ -139,6 +141,10 @@ export async function runRenderPlan(options: {
         const worker = randomUUID();
         // M5 claims FIFO globally. Claim atomically, rolling back if another queued job owns the head.
         const job = transaction(db, () => {
+          if (!canDispatch(db, plan!.projectId, step.estimatedCredits)) {
+            db.prepare('UPDATE render_plans SET status=? WHERE id=?').run(AWAITING_BUDGET_APPROVAL, plan!.id);
+            return null;
+          }
           const row = enqueueJob(db, { prompt: step.compiledPrompt, kind: 'video', model: 'fast', images: inputImages,
             outputDir: resolveInside(projectRoot, `renders/${step.sceneId}/${randomUUID()}`),
             sceneId: step.sceneId, chainId: step.chainId, takeIndex: index }, { projectId: plan!.projectId });
@@ -146,8 +152,16 @@ export async function runRenderPlan(options: {
           if (claimed?.id !== row.id) throw new Error('M5 queue must be drained before starting a pinned render');
           db.prepare('UPDATE render_jobs SET scene_id=?,prompt=?,model=? WHERE id=?')
             .run(step.sceneId, step.compiledPrompt, 'fast', row.id);
+          db.prepare('INSERT INTO render_credit_reservations VALUES (?,?,?)').run(row.id, plan!.projectId, step.estimatedCredits);
+          db.prepare("UPDATE render_plans SET status='ready' WHERE id=?").run(plan!.id);
+          db.prepare("UPDATE projects SET status='rendering' WHERE id=? AND status=?").run(plan!.projectId, AWAITING_BUDGET_APPROVAL);
           return claimed as unknown as WorkerJob;
         });
+        if (!job) {
+          db.prepare("UPDATE render_plan_steps SET status='ready' WHERE id=?").run(step.id);
+          stopped = true;
+          return;
+        }
         const startedAt = now();
         try {
           const result = await options.driver.run(job, { id: accountId, status: 'ready' }, { timeoutMs });

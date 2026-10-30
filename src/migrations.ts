@@ -188,6 +188,19 @@ DELETE FROM render_override_history WHERE step_id NOT IN (SELECT id FROM render_
 INSERT INTO render_override_history_new SELECT * FROM render_override_history;
 DROP TABLE render_override_history;
 ALTER TABLE render_override_history_new RENAME TO render_override_history;
+` }, { version: 12, name: 'Owner approved rework and project credit reservations', sql: `
+CREATE TABLE render_rework_requests (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+ plan_id TEXT NOT NULL REFERENCES render_plans(id) ON DELETE CASCADE,
+ scene_ids TEXT NOT NULL, estimated_credits INTEGER NOT NULL,
+ takes_per_scene INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'awaiting_owner_approval',
+ created_at TEXT NOT NULL
+);
+CREATE TABLE render_credit_reservations (
+ job_id TEXT PRIMARY KEY REFERENCES render_jobs(id) ON DELETE CASCADE,
+ project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+ credits INTEGER NOT NULL CHECK(credits>=0)
+);
 ` }];
 
 export const latestVersion = migrations.at(-1)!.version;

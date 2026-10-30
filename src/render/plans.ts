@@ -14,7 +14,7 @@ export type RenderPlanStep = {
   status: RenderStepStatus; updatedAt: string;
 };
 export type RenderPlan = {
-  id: string; projectId: string; inputHash: string; status: 'ready';
+  id: string; projectId: string; inputHash: string; status: 'ready' | 'cho_duyet_ngan_sach';
   estimatedCredits: number; createdAt: string; updatedAt: string; steps: RenderPlanStep[];
 };
 
