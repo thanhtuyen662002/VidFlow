@@ -8,7 +8,7 @@ export const defaultConfig = new URL('../../config/flow-selectors.json', import.
 // Shared detection rules for the mock and real profiles. Real DOM selectors still need calibration.
 export const flowPatterns = {
   verificationSelector: 'iframe[src*="captcha" i], iframe[title*="captcha" i], iframe[src*="challenge" i]',
-  verification: /verify (?:you are human|it's you)|unusual traffic|sign.in challenge|verification required/i,
+  verification: /verify (?:you are human|it's you)|unusual traffic|sign.in challenge|verification required|captcha|please sign.in/i,
   noCredit: /out of credits|insufficient credits|no credits/i,
   rejected: /reject|policy|not allowed/i,
 };

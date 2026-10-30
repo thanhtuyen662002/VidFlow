@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
 export type JobStatus = 'queued' | 'running' | 'done' | 'rejected' | 'failed';
+export const jobStatusLabels: Record<JobStatus, string> = { queued: 'đang chờ', running: 'đang chạy', done: 'hoàn tất', rejected: 'bị từ chối', failed: 'thất bại' };
 export function getJob(db: DatabaseSync, id: string) {
   return db.prepare('SELECT * FROM render_jobs WHERE id=? AND payload IS NOT NULL').get(id) ?? null;
 }

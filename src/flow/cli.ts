@@ -2,10 +2,16 @@ import { parseArgs } from 'node:util';
 import { loadSelectors } from './selectors.ts';
 import { playwrightPageAdapter, runSelftest } from './selftest.ts';
 import type { SelectorPage } from './selftest.ts';
+import { redactString } from '../redact.ts';
 
 type IO = { stdout: { write(text: string): unknown }; stderr: { write(text: string): unknown } };
 // Supplying a page keeps command tests independent of Playwright and Chromium.
 export async function runFlowSelftestCommand(args: string[], io: IO = process, page?: SelectorPage): Promise<number> {
+  const destination = io;
+  io = {
+    stdout: { write: text => destination.stdout.write(redactString(text)) },
+    stderr: { write: text => destination.stderr.write(redactString(text)) },
+  };
   let cleanup: (() => Promise<unknown>) | undefined;
   try {
     const { values, positionals } = parseArgs({ args, strict: true, allowPositionals: true, options: {

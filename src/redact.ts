@@ -3,6 +3,7 @@ export const SENSITIVE_KEYS = Object.freeze([
   'cookie', 'set-cookie', 'authorization', 'proxy-authorization', 'x-api-key',
   'api_key', 'apikey', 'access_token', 'refresh_token', 'id_token', 'token',
   'auth', 'session', 'sessionid', 'sid', 'password', 'passwd', 'pwd', 'secret',
+  'oauth', 'oauth_token', 'auth_token', 'session_id', 'session_token', 'csrf_token', 'xsrf-token',
   'client_secret', 'code', 'state', 'sig', 'signature', 'key', 'x-goog-*',
   'x-client-data', '__Secure-*', '__Host-*', 'SAPISID', 'APISID', 'HSID', 'SSID', 'NID',
 ]);
@@ -24,7 +25,7 @@ export function redactString(text: string): string {
   const assignments = new RegExp(`(["']?)\\b(${keys})\\1(\\s*[:=]\\s*)("[^"\\r\\n]*"|'[^'\\r\\n]*'|[^\\s&;,<>"'}]+)`, 'gi');
   return redactUrl(text)
     .replace(/\b((?:set-cookie|cookie|authorization|proxy-authorization)\s*:\s*)[^\r\n<]*/gi, `$1${REDACTION_MASK}`)
-    .replace(/\b(Bearer|Basic)\s+[^\s"'<>;,]+/gi, `$1 ${REDACTION_MASK}`)
+    .replace(/\b(Bearer|Basic|OAuth)\s+[^\s"'<>;,]+/gi, `$1 ${REDACTION_MASK}`)
     .replace(/\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, REDACTION_MASK)
     .replace(/\bya29\.[A-Za-z0-9._-]+|1\/\/[A-Za-z0-9._-]+/g, REDACTION_MASK)
     .replace(assignments,

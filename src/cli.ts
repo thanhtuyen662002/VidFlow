@@ -17,10 +17,14 @@ import { BibleService, UnregisteredReferenceError } from './prompt/bible.ts';
 import { compileSceneUnit } from './prompt/compiler.ts';
 import { runScript } from './script/cli.ts';
 import { runFlowSelftestCommand } from './flow/cli.ts';
+import { runFlowWorkerCommand } from './flow/workerCli.ts';
 
 type IO = { stdout: Pick<NodeJS.WriteStream, 'write'>; stderr: Pick<NodeJS.WriteStream, 'write'> };
 const usage = `Usage: vidflow init
        vidflow flow selftest [--profile mock|real] [--config <path>] [--url <url>]
+       vidflow flow account list|show <id>|mark <id> <state>|reset <id>
+       vidflow flow queue list [--state <state>]|show <id>|retry <id> [--force]|cancel <id>
+       vidflow flow run [--once]
        vidflow project create <name> --aspect <W:H> [--budget N]
        vidflow project list
        vidflow scene compile <project> <scene>
@@ -41,8 +45,7 @@ function details(project: Project): string {
 export function run(argv: string[], io: IO = process): number | Promise<number> {
   if (argv[0] === 'flow') {
     if (argv[1] === 'selftest') return runFlowSelftestCommand(argv.slice(2), io);
-    io.stderr.write('vidflow: Cần flow selftest\n');
-    return 2;
+    return runFlowWorkerCommand(argv.slice(1), io);
   }
   if (argv[0] === 'script') return runScript(argv.slice(1), io);
   let usageError = true;
@@ -135,3 +138,4 @@ export function run(argv: string[], io: IO = process): number | Promise<number> 
 }
 
 if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) process.exitCode = await run(process.argv.slice(2));
+

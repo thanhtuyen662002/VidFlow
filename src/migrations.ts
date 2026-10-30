@@ -145,7 +145,8 @@ CREATE TABLE script_decisions (
  kind TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL
 );
 CREATE INDEX script_decisions_variant ON script_decisions(variant_id);
-` }, { version: 7, name: 'Flow accounts, append-only credits and atomic queue', sql: '', apply: upgradeFlowQueue }];
+` }, { version: 7, name: 'Flow accounts, append-only credits and atomic queue', sql: '', apply: upgradeFlowQueue },
+{ version: 8, name: 'Flow worker media references', sql: 'ALTER TABLE render_jobs ADD COLUMN output_media TEXT CHECK(output_media IS NULL OR json_valid(output_media));' }];
 
 export const latestVersion = migrations.at(-1)!.version;
 

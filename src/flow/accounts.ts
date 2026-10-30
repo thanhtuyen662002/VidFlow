@@ -1,8 +1,14 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createAccount as createLegacyAccount } from '../repo/accounts.ts';
+import { getBalance } from './credits.ts';
 
 export type AccountStatus = 'ready' | 'out_of_credit' | 'needs_owner' | 'disabled';
 const statuses = ['ready', 'out_of_credit', 'needs_owner', 'disabled'];
+export const accountStatusLabels: Record<AccountStatus, string> = { ready: 'sẵn sàng', out_of_credit: 'hết credit', needs_owner: 'cần chủ sở hữu', disabled: 'đã tắt' };
+export function selectUsableAccount(db: DatabaseSync): { id: string; status: string } | undefined {
+  return listAccounts(db, { status: 'ready' }).find(account => getBalance(db, String(account.id)) > 0 &&
+    !db.prepare("SELECT id FROM render_jobs WHERE payload IS NOT NULL AND status='running' AND account_id=? LIMIT 1").get(account.id)) as { id: string; status: string } | undefined;
+}
 function validate(status: string): void {
   if (!statuses.includes(status)) throw new Error('Invalid account status');
 }

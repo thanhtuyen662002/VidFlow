@@ -3,13 +3,26 @@ import { relative, extname, isAbsolute } from 'node:path';
 import type { BrowserContext, Page } from 'playwright';
 import type { DatabaseSync } from 'node:sqlite';
 import { dataDirectory, getProfilesDir, projectDirectory, resolveInside } from '../paths.ts';
-import { redactObject } from '../redact.ts';
+import { redactObject, redactString } from '../redact.ts';
 import { saveNote } from './evidence.ts';
 import { setAccountStatus } from './accounts.ts';
 import { chargeJob } from './credits.ts';
 import { getJob } from './queue.ts';
 import { flowPatterns, loadSelectors } from './selectors.ts';
 import type { Selectors } from './selectors.ts';
+export type { FlowJobDriver } from './jobDriver.ts';
+
+/** Minimal page boundary, implemented by the guarded Playwright adapter below. */
+export interface FlowPage {
+  goto(url: string): Promise<void>;
+  fill(prompt: string): Promise<void>;
+  click(name: string): Promise<void>;
+  text(name: string): Promise<string>;
+  guard(): Promise<void>;
+  credits(): Promise<number>;
+  upload(files: string[]): Promise<void>;
+  download(directory: string, job: FlowJob): Promise<string>;
+}
 
 export type FlowJobResult =
   | { kind: 'completed'; files: string[]; creditsBefore: number; creditsAfter: number; creditsCharged: number }
@@ -22,6 +35,7 @@ export interface ActionEntry { seq: number; ts: string; action: 'goto' | 'fill' 
 export interface FlowDriverContext {
   db: DatabaseSync; browser: BrowserContext; url: string; timeoutMs: number;
   selectors?: Selectors; record?: (entry: ActionEntry) => void; evidenceRunId?: string;
+  page?: FlowPage;
 }
 export interface FlowDriver { runJob(job: FlowJob, ctx: FlowDriverContext): Promise<FlowJobResult> }
 
@@ -44,7 +58,7 @@ class VerificationStop extends Error {
 }
 
 /** Every page operation lives here. Logs contain symbolic targets only, never input values. */
-class ActionRecorder {
+class ActionRecorder implements FlowPage {
   page: Page; ctx: FlowDriverContext; selectors: Selectors; seq = 0; stopped?: VerificationStop;
   constructor(page: Page, ctx: FlowDriverContext) { this.page = page; this.ctx = ctx; this.selectors = ctx.selectors ?? loadSelectors(undefined, 'real'); }
   log(action: ActionEntry['action'], target: string) {
@@ -66,9 +80,10 @@ class ActionRecorder {
       if (await challenge.nth(i).isVisible()) { detectedBy = 'challenge-selector'; break; }
     }
     if (!detectedBy && flowPatterns.verification.test(await this.page.locator('body').innerText({ timeout: this.ctx.timeoutMs }))) detectedBy = 'challenge-text';
+    if (!detectedBy && await this.page.locator('input[type="email"], input[type="password"]').first().isVisible()) detectedBy = 'sign-in';
     if (detectedBy) {
       this.log('read', 'verification-detected');
-      this.stopped = new VerificationStop(detectedBy, this.page.url());
+      this.stopped = new VerificationStop(detectedBy, redactString(this.page.url()));
       throw this.stopped;
     }
   }
@@ -107,9 +122,13 @@ class ActionRecorder {
   }
 }
 
+export async function playwrightFlowPage(ctx: FlowDriverContext): Promise<FlowPage> {
+  return ActionRecorder.create(ctx);
+}
+
 export const flowDriver: FlowDriver = {
   async runJob(job, ctx) {
-    let recorder: ActionRecorder | undefined;
+    let recorder: FlowPage | undefined;
     try {
       if (!Number.isFinite(ctx.timeoutMs) || ctx.timeoutMs <= 0) throw new Error('Invalid timeout');
       if (!/^[a-z0-9_-]+$/i.test(job.id) || !Number.isSafeInteger(job.takeIndex ?? 0) || (job.takeIndex ?? 0) < 0) throw new Error('Invalid job');
@@ -123,7 +142,7 @@ export const flowDriver: FlowDriver = {
       const output = resolveInside(root, relative(root, job.outputDir));
       const images = (job.images ?? []).map(file => resolveInside(root, relative(root, file)));
       mkdirSync(output, { recursive: true });
-      recorder = await ActionRecorder.create(ctx);
+      recorder = ctx.page ?? await playwrightFlowPage(ctx);
       await recorder.goto(ctx.url);
       const creditsBefore = await recorder.credits();
       if (creditsBefore === 0) { setAccountStatus(ctx.db, job.accountId, 'out_of_credit'); return { kind: 'out_of_credits', creditsSeen: 0 }; }
@@ -135,7 +154,7 @@ export const flowDriver: FlowDriver = {
         await recorder.guard();
         const message = await recorder.text('errorBanner');
         if (flowPatterns.noCredit.test(message)) { setAccountStatus(ctx.db, job.accountId, 'out_of_credit'); return { kind: 'out_of_credits', creditsSeen: await recorder.credits() }; }
-        if (flowPatterns.rejected.test(message)) return { kind: 'rejected', reason: message };
+        if (flowPatterns.rejected.test(message)) return { kind: 'rejected', reason: redactString(message) };
         if (message) return { kind: 'failed', error: 'Flow generation failed', retryable: false };
         if (await recorder.text('downloadButton')) {
           const files = [await recorder.download(output, job)];
