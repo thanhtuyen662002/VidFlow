@@ -210,6 +210,32 @@ CREATE TABLE render_job_slots (
 ALTER TABLE render_plan_steps ADD COLUMN generation INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE render_plans ADD COLUMN takes_per_scene INTEGER CHECK(takes_per_scene>0);
 CREATE TABLE flow_fake_requests (id INTEGER PRIMARY KEY, job_id TEXT NOT NULL, created_at TEXT NOT NULL);
+` }, { version: 14, name: 'Aspect independent timeline snapshots', sql: `
+CREATE TABLE timeline (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+ created_at TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0),
+ status TEXT NOT NULL DEFAULT 'draft', UNIQUE(project_id,revision)
+);
+CREATE TABLE timeline_track (
+ id TEXT PRIMARY KEY, timeline_id TEXT NOT NULL REFERENCES timeline(id) ON DELETE CASCADE,
+ kind TEXT NOT NULL CHECK(kind IN ('video','dialogue','music','subtitle')),
+ "order" INTEGER NOT NULL, muted INTEGER NOT NULL DEFAULT 0 CHECK(muted IN (0,1)),
+ UNIQUE(timeline_id,kind), UNIQUE(timeline_id,"order")
+);
+CREATE TABLE timeline_clip (
+ id TEXT PRIMARY KEY, track_id TEXT NOT NULL REFERENCES timeline_track(id) ON DELETE CASCADE,
+ scene_id TEXT REFERENCES scenes(id), take_id TEXT REFERENCES takes(id),
+ source_asset_id TEXT REFERENCES assets(id), source_path TEXT NOT NULL,
+ in_point REAL NOT NULL CHECK(in_point>=0), out_point REAL NOT NULL CHECK(out_point>in_point),
+ timeline_start REAL NOT NULL CHECK(timeline_start>=0), duration REAL NOT NULL CHECK(duration=out_point-in_point),
+ "order" INTEGER NOT NULL, UNIQUE(track_id,"order")
+);
+CREATE TABLE timeline_subtitle (
+ id TEXT PRIMARY KEY, track_id TEXT NOT NULL REFERENCES timeline_track(id) ON DELETE CASCADE,
+ scene_id TEXT NOT NULL REFERENCES scenes(id), text TEXT NOT NULL,
+ start REAL NOT NULL CHECK(start>=0), end REAL NOT NULL CHECK(end>start),
+ "order" INTEGER NOT NULL, UNIQUE(track_id,"order")
+);
 ` }];
 
 export const latestVersion = migrations.at(-1)!.version;
