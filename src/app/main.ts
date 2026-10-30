@@ -3,6 +3,10 @@ import type { Services } from './ipc.ts';
 import type { ProgressSource } from '../service/progress.ts';
 import { registerIpc } from './ipc.ts';
 import { createProgressForwarder } from './progress.ts';
+import { createMcpLifecycle } from './mcp/lifecycle.ts';
+import type { McpSettingsStore } from './mcp/settings.ts';
+import { createMcpSettingsStore } from './mcp/settings.ts';
+import { openDatabase } from '../db.ts';
 
 export function getSecureWebPreferences() {
   return { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,
@@ -10,7 +14,7 @@ export function getSecureWebPreferences() {
 }
 
 /** Called by the application composition root with the same service instance as MCP. */
-export async function startElectron(services: Services & ProgressSource, rendererUrl: string) {
+export async function startElectron(services: Services & ProgressSource, rendererUrl: string, settings?: McpSettingsStore) {
   const { app, BrowserWindow, ipcMain } = await import('electron');
   const target = new URL(rendererUrl);
   if (target.protocol !== 'file:' && !(target.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(target.hostname))) throw new Error('Untrusted renderer URL');
@@ -18,6 +22,15 @@ export async function startElectron(services: Services & ProgressSource, rendere
     try { const candidate = new URL(url); return target.protocol === 'file:' ? candidate.protocol === 'file:' && candidate.pathname === target.pathname && candidate.host === target.host : candidate.origin === target.origin; } catch { return false; }
   };
   await app.whenReady();
+  const settingsDb = settings ? undefined : openDatabase();
+  const mcp = createMcpLifecycle(services, settings ?? createMcpSettingsStore(settingsDb!));
+  try { await mcp.start(); } catch (error) { await mcp.stop(); settingsDb?.close(); throw error; }
+  let quitting = false;
+  app.on('before-quit', event => {
+    if (!mcp || quitting) return;
+    event.preventDefault();
+    void mcp.stop().finally(() => { settingsDb?.close(); quitting = true; app.quit(); });
+  });
   const windows = new Set<InstanceType<typeof BrowserWindow>>();
   const unregister = registerIpc(ipcMain, services, event => {
     const e = event as Electron.IpcMainInvokeEvent;

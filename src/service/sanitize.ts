@@ -1,5 +1,5 @@
 ﻿import { redactString } from '../redact.ts';
-export const sensitiveKey = /cookie|token|authorization|password|secret|apikey/i;
+export const sensitiveKey = /cookie|token|authorization|password|secret|apikey|session|storageState/i;
 /** Also scrub serialized JSON, since repository content/payload fields may contain JSON. */
 export function sanitize(value: unknown, secrets: readonly string[] = []): unknown {
   if (typeof value === 'string') {
