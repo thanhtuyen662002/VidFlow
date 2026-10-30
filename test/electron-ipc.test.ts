@@ -44,9 +44,9 @@ test('secure preferences and sandbox preload expose exactly service commands', a
  runInNewContext(readFileSync('src/app/preload.cjs','utf8'),{require:name=>{
   assert.equal(name,'electron');return {contextBridge:{exposeInMainWorld:(key,value)=>{assert.equal(key,'vidflow');api=value;}},ipcRenderer:{invoke:(...args)=>{invocations.push(args);return Promise.resolve({ok:true,data:42});},on:(c,l)=>listeners.set(c,l),removeListener:(c,l)=>{assert.equal(listeners.get(c),l);listeners.delete(c);}}};
  }});
- const exposed=Object.entries(api).filter(([g])=>g!=='onRenderProgress').flatMap(([g,methods])=>Object.keys(methods).map(m=>`${g}.${m}`));
+ const exposed=Object.entries(api).filter(([g])=>!['onRenderProgress','projects','references'].includes(g)).flatMap(([g,methods])=>Object.keys(methods).map(m=>`${g}.${m}`));
  assert.deepEqual(exposed.sort(),service.listCommands().map(c=>c.name).sort());
- assert.deepEqual(Object.keys(api).sort(),[...new Set(service.listCommands().map(c=>c.name.split('.')[0])),'onRenderProgress'].sort());
+ assert.deepEqual(Object.keys(api).sort(),[...new Set(service.listCommands().map(c=>c.name.split('.')[0])),'projects','references','onRenderProgress'].sort());
  for(const name of exposed){const [g,m]=name.split('.');await api[g][m]({});assert.equal(invocations.at(-1)[0],name.replace('.',':'));}
  let received;const stop=api.onRenderProgress(p=>received=p),payload={jobId:'j'};listeners.get('render:progress')({secret:'event'},payload);assert.equal(received,payload);stop();assert.equal(listeners.size,0);
 });

@@ -1,12 +1,13 @@
+import { getScriptGate, skipScriptGate } from '../script/gate.ts';
 import { createProgressSource } from './progress.ts';
-﻿import type { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import type { LlmClient } from '../script/llm/types.ts';
 import type { FlowJobDriver } from '../flow/jobDriver.ts';
 import type { JsonSchema, ValidationError } from '../script/llm/schema.ts';
 import { validateSchema } from '../script/llm/schema.ts';
 import { createProject, getProject, listProjects } from '../repo/projects.ts';
 import { BibleService } from '../prompt/bible.ts';
-import { setBible } from '../repo/bibles.ts';
+import { getBible, setBible } from '../repo/bibles.ts';
 import { getScriptVariant } from '../repo/scripts.ts';
 import { generateVariants, scoreVariants, revise, reviewRisks, approve, overrideWarning, ScriptGateError } from '../script/variants.ts';
 import { generateStoryboard, getStoryboard, initializeStoryboards, approveStoryboard, approvedStoryboardPlan, StoryboardGateError } from '../script/storyboard.ts';
@@ -33,7 +34,7 @@ import { DuplicateError } from '../types.ts';
 import { NoSelectedTakeError, InvalidTimelineSelectionError } from '../edit/timeline.ts';
 import { storyboardPreviewPlan } from '../script/storyboard.ts';
 
-export type ErrorCode = 'VALIDATION_ERROR' | 'UNKNOWN_COMMAND' | 'NOT_FOUND' | 'PRECONDITION_FAILED' | 'INTERNAL_ERROR';
+export type ErrorCode = 'VALIDATION_ERROR' | 'UNKNOWN_COMMAND' | 'NOT_FOUND' | 'PRECONDITION_FAILED' | 'INTERNAL_ERROR' | 'NOT_SUPPORTED';
 export type ServiceResult = { ok: true; data: unknown } | { ok: false; error: { code: ErrorCode; message: string; details: ValidationError[] } };
 class ServiceError extends Error {
   code: ErrorCode;
@@ -106,6 +107,17 @@ export function createCoreService(deps: ServiceDependencies) {
   register<{ projectId: string; name: string; kind: 'character' | 'location' | 'prop' | 'style'; images: string[]; description: string; priority: number }>('reference.add', object({ projectId: text, name: text, kind: { type: 'string', enum: ['character', 'location', 'prop', 'style'] }, images: { ...array(text), minItems: 1 }, description: text, priority: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER } }), referenceSchema,
     i => { project(i.projectId); return new BibleService(db).add(i.projectId, i); });
   register<{ projectId: string }>('reference.list', projectInput, array(referenceSchema), i => { project(i.projectId); return new BibleService(db).list(i.projectId); });
+  register<{ projectId: string }>('bible.get', projectInput, output({}), i => {
+    project(i.projectId);
+    const saved = getBible(db, i.projectId);
+    return Object.fromEntries(['style', 'lighting', 'palette', 'lens', 'avoid', 'safe_area'].map(key => [key, saved?.[key] ?? '']));
+  });
+  register<{ projectId: string; refId: string }>('reference.remove', object({ projectId: text, refId: text }), { type: 'boolean' }, i => {
+    project(i.projectId);
+    return new BibleService(db).delete(i.projectId, i.refId, true);
+  });
+  register<{ projectId: string }>('script.getGate', projectInput, output({}), i => { project(i.projectId); return getScriptGate(db, i.projectId); });
+  register<{ projectId: string; reason: string }>('script.skip', object({ projectId: text, reason: text }), output({}), i => { project(i.projectId); return skipScriptGate(db, i.projectId, i.reason); });
   const bibleFields = Object.fromEntries(['style','lighting','palette','lens','avoid','safe_area'].map(k => [k, { type: 'string' } as JsonSchema]));
   register<{ projectId: string; fields: Parameters<typeof setBible>[2] }>('bible.update', object({ projectId: text, fields: object(bibleFields, []) }), bibleSchema,
     i => { project(i.projectId); return setBible(db, i.projectId, i.fields); });

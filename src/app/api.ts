@@ -1,9 +1,9 @@
 import type { createIpcHandlers } from './ipc.ts';
 import type { RenderProgress } from '../service/progress.ts';
 type Result = Awaited<ReturnType<ReturnType<typeof createIpcHandlers>['handleInvoke']>>;
-export interface VidflowApi {
+export interface LegacyApi {
   project: { create(input: Record<string, unknown>): Promise<Result>; list(input: Record<string, unknown>): Promise<Result>; get(input: Record<string, unknown>): Promise<Result> };
-  reference: { add(input: Record<string, unknown>): Promise<Result>; list(input: Record<string, unknown>): Promise<Result> };
+  reference: { remove(input: Record<string, unknown>): Promise<Result>; add(input: Record<string, unknown>): Promise<Result>; list(input: Record<string, unknown>): Promise<Result> };
   bible: { update(input: Record<string, unknown>): Promise<Result> };
   script: { generate(input: Record<string, unknown>): Promise<Result>; score(input: Record<string, unknown>): Promise<Result>; revise(input: Record<string, unknown>): Promise<Result>; review(input: Record<string, unknown>): Promise<Result>; override(input: Record<string, unknown>): Promise<Result>; approve(input: Record<string, unknown>): Promise<Result> };
   storyboard: { generate(input: Record<string, unknown>): Promise<Result>; approve(input: Record<string, unknown>): Promise<Result>; get(input: Record<string, unknown>): Promise<Result>; preview(input: Record<string, unknown>): Promise<Result> };
@@ -17,4 +17,10 @@ export interface VidflowApi {
   queue: { list(input: Record<string, unknown>): Promise<Result> };
   onRenderProgress(callback: (payload: RenderProgress) => void): () => void;
 }
+export type { VidFlowApi } from './renderer-contract.ts';
+import type { VidFlowApi } from './renderer-contract.ts';
+export type VidflowApi = Omit<LegacyApi, 'bible' | 'script'> & VidFlowApi & {
+  bible: LegacyApi['bible'] & VidFlowApi['bible'];
+  script: LegacyApi['script'] & VidFlowApi['script'];
+};
 declare global { interface Window { vidflow: VidflowApi } }

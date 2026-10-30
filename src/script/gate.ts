@@ -7,7 +7,7 @@ import { scriptScenesSchema, validateScenes, evaluateVariant } from './variants.
 import { generateValidated } from './llm/generate.ts';
 import { LlmValidationExhaustedError } from './llm/errors.ts';
 import { loadSystemPrompt } from './prompts.ts';
-import { createScriptVariant, getScriptVariant, updateScriptVariant } from '../repo/scripts.ts';
+import { createScriptVariant, getScriptVariant, updateScriptVariant, listScriptVariants } from '../repo/scripts.ts';
 import { createScriptReview } from '../repo/script-reviews.ts';
 import { createScriptDecision, listScriptDecisions } from '../repo/script-decisions.ts';
 import { transaction } from '../repo/records.ts';
@@ -146,14 +146,7 @@ function contentHash(current: ReturnType<typeof version>) {
 }
 export function overrideWarning(db: DatabaseSync, scriptId: string, versionId: string, warningId: string, reason: string) {
   return transaction(db, () => {
-    const current = version(db, scriptId, versionId);
-    if (!reason.trim()) throw new ScriptGateError('REASON_REQUIRED', 'Phải ghi lý do bỏ qua cảnh báo.');
-    const review = latestReview(db, versionId);
-    if (review?.data.contentHash !== contentHash(current))
-      throw new ScriptGateError('RISK_REVIEW_REQUIRED', 'Cần soát lại rủi ro cho nội dung hiện tại.');
-    const warnings = review?.data.warnings as RiskWarning[] | undefined;
-    if (!warnings?.some(w => w.id === warningId)) throw new ScriptGateError('WARNING_NOT_FOUND', 'Không tìm thấy cảnh báo.');
-    return createScriptDecision(db, { variantId: versionId, kind: 'override', data: { warningId, reason: reason.trim(), actor: 'owner', timestamp: new Date().toISOString() } });
+    return recordOverride(db, scriptId, versionId, warningId, reason);
   });
 }
 export function acceptRevision(db: DatabaseSync, scriptId: string, versionId: string) {
@@ -165,6 +158,18 @@ export function acceptRevision(db: DatabaseSync, scriptId: string, versionId: st
 }
 export function approve(db: DatabaseSync, scriptId: string, versionId: string) {
   return transaction(db, () => {
+    const { current, overrides } = assertApprovable(db, scriptId, versionId);
+    const record = createScriptDecision(db, { variantId: versionId, kind: 'approval', data: {
+      versionId, approvedAt: new Date().toISOString(), actor: 'owner', overrides: overrides.map(record => record.data),
+    } });
+    // setActive owns a transaction; perform its equivalent inside this transaction.
+    db.prepare('UPDATE script_variants SET is_active=0 WHERE project_id=(SELECT project_id FROM script_variants WHERE id=?)').run(versionId);
+    updateScriptVariant(db, versionId, { status: 'approved', isActive: true });
+    return record;
+  });
+}
+
+function assertApprovable(db: DatabaseSync, scriptId: string, versionId: string) {
     const current = version(db, scriptId, versionId);
     const review = latestReview(db, versionId);
     if (!review) throw new ScriptGateError('RISK_REVIEW_REQUIRED', 'Chưa soát rủi ro; cần soát trước khi duyệt.');
@@ -174,12 +179,53 @@ export function approve(db: DatabaseSync, scriptId: string, versionId: string) {
     const warnings = review.data.warnings as RiskWarning[];
     const unresolved = warnings.filter(w => !overrides.some(record => record.data.warningId === w.id)).map(w => w.id);
     if (unresolved.length) throw new ScriptGateError('UNRESOLVED_WARNINGS', `Còn cảnh báo chưa xử lý: ${unresolved.join(', ')}.`, unresolved);
-    const record = createScriptDecision(db, { variantId: versionId, kind: 'approval', data: {
-      versionId, approvedAt: new Date().toISOString(), actor: 'owner', overrides: overrides.map(record => record.data),
-    } });
-    // setActive owns a transaction; perform its equivalent inside this transaction.
-    db.prepare('UPDATE script_variants SET is_active=0 WHERE project_id=(SELECT project_id FROM script_variants WHERE id=?)').run(versionId);
-    updateScriptVariant(db, versionId, { status: 'approved', isActive: true });
-    return record;
+    return { current, overrides };
+}
+export async function getScriptGate(db: DatabaseSync, projectId: string) {
+  const options = [];
+  for (const current of listScriptVariants(db, projectId)) {
+    let root = current;
+    const visited = new Set<string>();
+    while (root.parentVariantId && !visited.has(root.id)) {
+      visited.add(root.id);
+      root = getScriptVariant(db, root.parentVariantId)!;
+      if (!root) throw new ScriptGateError('VERSION_NOT_FOUND', 'Không tìm thấy phiên bản gốc.');
+    }
+    const risks = await reviewRisks({ db, scriptId: root.id, versionId: current.id });
+    let blockingReasons: string[] = [];
+    try { assertApprovable(db, root.id, current.id); }
+    catch (error) { if (!(error instanceof ScriptGateError)) throw error; blockingReasons = [error.message]; }
+    options.push({ id: current.id, scriptId: root.id, versionId: current.id,
+      title: current.name || current.logline || 'Phương án ' + current.versionNumber,
+      score: typeof current.scores.overall === 'number' ? current.scores.overall : null,
+      notes: current.feedback, risks: risks.map(risk => ({ ...risk, level: risk.severity })),
+      canApprove: current.status !== 'approved' && blockingReasons.length === 0, blockingReasons });
+  }
+  return { status: options.length ? 'Chờ duyệt' : 'Chưa có kịch bản', options,
+    canApprove: options.some(option => option.canApprove), canSkip: options.length > 0,
+    comments: options.map(option => option.notes).filter(Boolean),
+    blockingReasons: options.flatMap(option => option.blockingReasons) };
+}
+export async function skipScriptGate(db: DatabaseSync, projectId: string, reason: string) {
+  if (!reason.trim()) throw new ScriptGateError('REASON_REQUIRED', 'Phải ghi lý do bỏ qua.');
+  const gate = await getScriptGate(db, projectId);
+  if (!gate.canSkip) throw new ScriptGateError('VERSION_NOT_FOUND', 'Chưa có kịch bản.');
+  return transaction(db, () => {
+    for (const option of gate.options) {
+      for (const warning of option.risks) recordOverride(db, option.scriptId, option.versionId, warning.id, reason);
+      createScriptDecision(db, { variantId: option.versionId, kind: 'skip', data: { reason: reason.trim(), actor: 'owner' } });
+    }
+    return { projectId, reason: reason.trim() };
   });
+}
+
+function recordOverride(db: DatabaseSync, scriptId: string, versionId: string, warningId: string, reason: string) {
+    const current = version(db, scriptId, versionId);
+    if (!reason.trim()) throw new ScriptGateError('REASON_REQUIRED', 'Phải ghi lý do bỏ qua cảnh báo.');
+    const review = latestReview(db, versionId);
+    if (review?.data.contentHash !== contentHash(current))
+      throw new ScriptGateError('RISK_REVIEW_REQUIRED', 'Cần soát lại rủi ro cho nội dung hiện tại.');
+    const warnings = review?.data.warnings as RiskWarning[] | undefined;
+    if (!warnings?.some(w => w.id === warningId)) throw new ScriptGateError('WARNING_NOT_FOUND', 'Không tìm thấy cảnh báo.');
+    return createScriptDecision(db, { variantId: versionId, kind: 'override', data: { warningId, reason: reason.trim(), actor: 'owner', timestamp: new Date().toISOString() } });
 }

@@ -95,6 +95,13 @@ test('service-only project to package flow, every command returns safe data', as
   const packaged = await run<{ directory: string; manifest: { files: unknown[] } }>('export.package', { timelineId: timeline.id, videos: [{ aspect: '16:9', path: video.path }], coverPath, llmModel: 'fake' });
   assert.ok(packaged.manifest.files.length);
   assert.ok(JSON.parse(readFileSync(join(packaged.directory, 'manifest.json'), 'utf8')).files.length);
+  await run('bible.get', { projectId: p.id });
+  assert.equal(await run('reference.remove', { projectId: p.id, refId: 'missing' }), false);
+  const gate = await run<{ options: { versionId: string; risks: unknown[] }[]; canApprove: boolean }>('script.getGate', { projectId: p.id });
+  assert.ok(gate.options.some(option => option.versionId === versionId));
+  const blankSkip = await service.execute('script.skip', { projectId: p.id, reason: '   ' });
+  assert.equal(blankSkip.ok, false);
+  await run('script.skip', { projectId: p.id, reason: 'Owner reason' });
   assert.deepEqual([...called].sort(), service.listCommands().map(c => c.name).sort());
   await run('bible.update', { projectId: p.id, fields: { style: 'Changed lighting' } });
   const stale = await service.execute('render.run', { planId: plan.id, storyboardId: board.id });

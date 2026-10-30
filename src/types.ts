@@ -21,3 +21,6 @@ export type RenderJob = { id: string; projectId: string; sceneId: string; accoun
 export type Take = { id: string; renderJobId: string; sceneId: string; assetId: string | null; file: string; metadata: Record<string, unknown>; qualityScore: number | null; selected: boolean; durationSec: number; createdAt: string };
 export type Selection = { id: string; sceneId: string; takeId: string; in: number; out: number; crop: Record<string, unknown>; exitFrame: string | null; isCurrent: boolean; createdAt: string };
 export type ChainScene = { chainId: string; sceneId: string; position: number };
+
+export type ScriptApprovalInput = { scriptId: string; versionId: string };
+export type ScriptOverrideInput = ScriptApprovalInput & { warningId: string; reason: string };
