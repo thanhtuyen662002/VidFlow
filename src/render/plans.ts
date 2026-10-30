@@ -89,7 +89,7 @@ export function buildRenderPlan(db: DatabaseSync, projectId: string,
     if (existing) return getRenderPlan(db, existing.id as string)!;
     const id = randomUUID();
     const now = new Date().toISOString();
-    db.prepare(`INSERT INTO render_plans VALUES (?,?,?,'ready',0,?,?)`).run(id, projectId, inputHash, now, now);
+    db.prepare(`INSERT INTO render_plans(id,project_id,input_hash,status,estimated_credits,created_at,updated_at) VALUES (?,?,?,'ready',0,?,?)`).run(id, projectId, inputHash, now, now);
     event(db, id, null, null, 'ready', now);
     for (const chain of input) {
       let previous: string | null = null;
@@ -125,6 +125,7 @@ export function transitionStep(db: DatabaseSync, stepId: string, toStatus: Rende
     if (step.dependsOnStepId && db.prepare('SELECT status FROM render_plan_steps WHERE id=?')
       .get(step.dependsOnStepId)?.status !== 'done') throw new Error('Dependency is not done');
     const now = new Date().toISOString();
+    if (step.status === 'done' && toStatus === 'ready') db.prepare('UPDATE render_plan_steps SET generation=generation+1 WHERE id=?').run(stepId);
     db.prepare('UPDATE render_plan_steps SET status=?,updated_at=? WHERE id=?').run(toStatus, now, stepId);
     db.prepare('UPDATE render_plans SET updated_at=? WHERE id=?').run(now, step.planId);
     event(db, step.planId, stepId, step.status, toStatus, now);

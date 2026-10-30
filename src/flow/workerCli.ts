@@ -10,6 +10,7 @@ import type { FlowJobDriver } from './jobDriver.ts';
 import { createScheduler } from './scheduler.ts';
 import { createPageDriver } from './pageDriver.ts';
 import { launchFlowContext } from './driver.ts';
+import { recoverInterruptedJobs } from '../render/recovery.ts';
 
 type IO = { stdout: { write(text: string): unknown }; stderr: { write(text: string): unknown } };
 export async function runFlowWorkerCommand(args: string[], io: IO = process, dependencies: { db?: DatabaseSync; driver?: FlowJobDriver } = {}): Promise<number> {
@@ -52,6 +53,7 @@ export async function runFlowWorkerCommand(args: string[], io: IO = process, dep
       }
     } else {
       const store = db;
+      await recoverInterruptedJobs(db);
       const driver = dependencies.driver ?? createPageDriver(async accountId => ({ db: store, browser: await launchFlowContext(accountId), url: 'https://labs.google/fx/tools/flow', timeoutMs: 30000 }));
       const scheduler = createScheduler({ queue: db, accounts: db, driver, logger: output });
       output({ state: await (values.once ? scheduler.runOnce() : scheduler.runUntilIdle()) });

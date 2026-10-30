@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync } from 'node:fs';
+import { mkdirSync, existsSync, renameSync } from 'node:fs';
 import { relative, extname, isAbsolute } from 'node:path';
 import type { BrowserContext, Page } from 'playwright';
 import type { DatabaseSync } from 'node:sqlite';
@@ -113,7 +113,8 @@ class ActionRecorder implements FlowPage {
     if (!/^\.[a-z0-9]{1,8}$/i.test(extension)) throw new Error('Invalid file extension');
     const filename = resolveInside(directory, `${job.id}_${job.takeIndex ?? 0}${extension}`);
     if (existsSync(filename)) throw new Error('Original take already exists');
-    this.log('download', 'generated-file'); await download.saveAs(filename);
+    this.log('download', 'generated-file'); await download.saveAs(filename + '.partial');
+    renameSync(filename + '.partial', filename);
     return filename;
   }
   static async create(ctx: FlowDriverContext) {
@@ -134,7 +135,10 @@ export const flowDriver: FlowDriver = {
       if (!/^[a-z0-9_-]+$/i.test(job.id) || !Number.isSafeInteger(job.takeIndex ?? 0) || (job.takeIndex ?? 0) < 0) throw new Error('Invalid job');
       if (!getJob(ctx.db, job.id)) throw new Error('Queue job not found');
       // A completed charge must never cause another paid generation on retry.
-      if (ctx.db.prepare('SELECT id FROM credit_ledger WHERE job_id=? AND amount IS NOT NULL').get(job.id)) {
+      const previousCharge = ctx.db.prepare('SELECT account_id FROM credit_ledger WHERE job_id=? AND amount IS NOT NULL').get(job.id);
+        const payload = JSON.parse(String(getJob(ctx.db, job.id)!.payload));
+        const interrupted = payload.interruptedRecovery === true || payload.renderRetry === true;
+      if (previousCharge && (!interrupted || previousCharge.account_id !== job.accountId)) {
         return { kind: 'failed', error: 'Job already charged; use the existing take', retryable: false };
       }
       const root = projectDirectory(job.projectId);

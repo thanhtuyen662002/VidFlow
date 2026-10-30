@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FlowJobDriver, WorkerJob } from '../flow/jobDriver.ts';
-import { enqueueJob, claimNextJob, completeJob, failJob, rejectJob } from '../flow/queue.ts';
+import { enqueueJob, completeJob, failJob, rejectJob } from '../flow/queue.ts';
 import { listAccounts, setAccountStatus } from '../flow/accounts.ts';
 import { getBalance } from '../flow/credits.ts';
 import { createTake, listByScene } from '../repo/renders.ts';
@@ -16,6 +16,7 @@ import type { RenderPlanStep } from './plans.ts';
 import type { LlmClient } from '../script/llm/types.ts';
 import { generateValidated } from '../script/llm/generate.ts';
 import { buildStartFrame, markNextFrameDirty, saveStartFrame } from './frameChain.ts';
+import { recoverInterruptedJobs } from './recovery.ts';
 import { canDispatch, AWAITING_BUDGET_APPROVAL } from './budget.ts';
 
 export type ReviewTake = { id: string; file: string; duration: number; startedAt: string; finishedAt: string };
@@ -93,15 +94,19 @@ export async function runRenderPlan(options: {
   db: DatabaseSync; planId: string; driver: FlowJobDriver; reviewer: TakeReviewer; takesPerScene?: number;
   clock?: () => Date; timeoutMs?: number;
   duration: (file: string) => Promise<number>;
+  signal?: AbortSignal;
   /** For tests and injection only; production uses the M3 frame chain. */
   exitFrame?: (scene: ReviewScene, selection: TakeSelection) => Promise<string>;
 }): Promise<void> {
   const { db } = options;
   initializeRenderReviews(db);
+  await recoverInterruptedJobs(db, options.duration);
   const approvedRework = db.prepare("SELECT takes_per_scene FROM render_rework_requests WHERE plan_id=? AND state='accepted' ORDER BY created_at DESC LIMIT 1").get(options.planId);
-  const count = approvedRework ? Number(approvedRework.takes_per_scene) : options.takesPerScene ?? 2;
+  const persistedCount = db.prepare('SELECT takes_per_scene FROM render_plans WHERE id=?').get(options.planId)?.takes_per_scene;
+  const count = approvedRework ? Number(approvedRework.takes_per_scene) : persistedCount == null ? options.takesPerScene ?? 2 : Number(persistedCount);
   const timeoutMs = options.timeoutMs ?? 30000;
   if (!Number.isSafeInteger(count) || count < 1 || !Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('Invalid render limits');
+  db.prepare('UPDATE render_plans SET takes_per_scene=? WHERE id=?').run(count, options.planId);
   const now = () => (options.clock?.() ?? new Date()).toISOString();
   const plan = getRenderPlan(db, options.planId);
   if (!plan) throw new Error('Render plan not found');
@@ -116,6 +121,7 @@ export async function runRenderPlan(options: {
   async function runStep(step: RenderPlanStep, accountId: string) {
     const dirty = db.prepare('SELECT needs_rerender FROM render_plan_steps WHERE id=?').get(step.id)?.needs_rerender;
     if (step.status === 'done' && !dirty) return;
+    if (step.status === 'running') step.status = 'ready';
     if (step.status === 'done') transitionStep(db, step.id, 'ready');
     if (step.status === 'pending' || step.status === 'failed') transitionStep(db, step.id, 'ready');
     transitionStep(db, step.id, 'running');
@@ -135,24 +141,47 @@ export async function runRenderPlan(options: {
         } else inputImages = [await buildStartFrame(db, step.id)];
       }
       for (let index = 0; index < count; index++) {
-        if (stopped) throw new Error('Render stopped');
+        if (options.signal?.aborted) { db.prepare("UPDATE render_plan_steps SET status='ready' WHERE id=?").run(step.id); stopped = true; return; }
+        if (stopped) return;
         if (getBalance(db, accountId) <= 0 || db.prepare('SELECT status FROM flow_accounts WHERE id=?').get(accountId)?.status !== 'ready')
           throw new Error('Flow account unavailable; owner action required');
         const worker = randomUUID();
-        // M5 claims FIFO globally. Claim atomically, rolling back if another queued job owns the head.
+        const generation = Number(db.prepare('SELECT generation FROM render_plan_steps WHERE id=?').get(step.id)!.generation);
+        const saved = db.prepare(`SELECT j.* FROM render_job_slots s JOIN render_jobs j ON j.id=s.job_id
+          WHERE s.step_id=? AND s.generation=? AND s.take_index=?`).get(step.id, generation, index);
+        if (saved?.status === 'done') continue;
+        if (saved?.status === 'rejected') throw new Error(`Take ${index + 1} của bước ${step.id} đã bị từ chối; cần chủ dự án chấp nhận làm lại (render accept-redo) trước khi chạy tiếp; làm lại sẽ tăng generation`);
+        // Claim the persisted slot atomically; never consume another step's queued job.
         const job = transaction(db, () => {
-          if (!canDispatch(db, plan!.projectId, step.estimatedCredits)) {
+          const timestamp = now();
+          if (saved?.status === 'failed') {
+            const payload = { ...JSON.parse(String(saved.payload)), renderRetry: true,
+              outputDir: resolveInside(projectRoot, `renders/${step.sceneId}/${randomUUID()}`) };
+            db.prepare(`UPDATE render_jobs SET status='queued',error=NULL,claimed_at=NULL,finished_at=NULL,
+              worker_id=NULL,account_id=NULL,payload=?,updated_at=? WHERE id=? AND status='failed'`).run(JSON.stringify(payload), timestamp, saved.id);
+            db.prepare('DELETE FROM render_credit_reservations WHERE job_id=?').run(saved.id);
+          }
+          const reserved = saved && db.prepare('SELECT job_id FROM render_credit_reservations WHERE job_id=?').get(saved.id);
+          if (!reserved && !canDispatch(db, plan!.projectId, step.estimatedCredits)) {
             db.prepare('UPDATE render_plans SET status=? WHERE id=?').run(AWAITING_BUDGET_APPROVAL, plan!.id);
             return null;
           }
-          const row = enqueueJob(db, { prompt: step.compiledPrompt, kind: 'video', model: 'fast', images: inputImages,
+          const row = saved ?? enqueueJob(db, { prompt: step.compiledPrompt, kind: 'video', model: 'fast', images: inputImages,
             outputDir: resolveInside(projectRoot, `renders/${step.sceneId}/${randomUUID()}`),
             sceneId: step.sceneId, chainId: step.chainId, takeIndex: index }, { projectId: plan!.projectId });
-          const claimed = claimNextJob(db, worker, { accountId });
-          if (claimed?.id !== row.id) throw new Error('M5 queue must be drained before starting a pinned render');
+          const claimed = db.prepare("UPDATE render_jobs SET status='running',worker_id=?,account_id=?,claimed_at=?,updated_at=?,attempts=attempts+1 WHERE id=? AND status='queued' RETURNING *").get(worker, accountId, timestamp, timestamp, row.id);
+          if (!claimed) {
+            const current = db.prepare('SELECT status FROM render_jobs WHERE id=?').get(row.id);
+            throw new Error(`Không thể nhận job ${row.id}: trạng thái ${current?.status ?? 'không tồn tại'}`);
+          }
           db.prepare('UPDATE render_jobs SET scene_id=?,prompt=?,model=? WHERE id=?')
             .run(step.sceneId, step.compiledPrompt, 'fast', row.id);
-          db.prepare('INSERT INTO render_credit_reservations VALUES (?,?,?)').run(row.id, plan!.projectId, step.estimatedCredits);
+          if (!reserved) {
+            db.prepare('INSERT INTO render_credit_reservations VALUES (?,?,?)').run(row.id, plan!.projectId, step.estimatedCredits);
+          }
+          if (!saved) {
+            db.prepare('INSERT INTO render_job_slots VALUES (?,?,?,?)').run(step.id, generation, index, row.id);
+          }
           db.prepare("UPDATE render_plans SET status='ready' WHERE id=?").run(plan!.id);
           db.prepare("UPDATE projects SET status='rendering' WHERE id=? AND status=?").run(plan!.projectId, AWAITING_BUDGET_APPROVAL);
           return claimed as unknown as WorkerJob;
@@ -178,10 +207,18 @@ export async function runRenderPlan(options: {
           assertInsideDataDir(file, projectRoot);
           const durationSec = await options.duration(file);
           if (!Number.isFinite(durationSec) || durationSec <= 0) throw new Error('Invalid take duration');
+          transaction(db, () => {
           createTake(db, { renderJobId: job.id, sceneId: step.sceneId, file, durationSec, metadata: { startedAt, finishedAt } });
           db.prepare('UPDATE render_jobs SET output_media=? WHERE id=?').run(JSON.stringify(result.media), job.id);
           completeJob(db, job.id, worker);
-        } catch (error) { failJob(db, job.id, worker, 'Render generation failed'); throw error; }
+          });
+        } catch (error) {
+          transaction(db, () => {
+            failJob(db, job.id, worker, 'Render generation failed');
+            db.prepare('DELETE FROM render_credit_reservations WHERE job_id=?').run(job.id);
+          });
+          throw error;
+        }
       }
       const scene = getReviewScene(db, step.id);
       const suggestion = await options.reviewer.review(scene, scene.takes);

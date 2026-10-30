@@ -201,6 +201,15 @@ CREATE TABLE render_credit_reservations (
  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
  credits INTEGER NOT NULL CHECK(credits>=0)
 );
+` }, { version: 13, name: 'Restartable render job slots', sql: `
+CREATE TABLE render_job_slots (
+ step_id TEXT NOT NULL REFERENCES render_plan_steps(id), generation INTEGER NOT NULL,
+ take_index INTEGER NOT NULL, job_id TEXT NOT NULL UNIQUE REFERENCES render_jobs(id),
+ PRIMARY KEY(step_id,generation,take_index)
+);
+ALTER TABLE render_plan_steps ADD COLUMN generation INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE render_plans ADD COLUMN takes_per_scene INTEGER CHECK(takes_per_scene>0);
+CREATE TABLE flow_fake_requests (id INTEGER PRIMARY KEY, job_id TEXT NOT NULL, created_at TEXT NOT NULL);
 ` }];
 
 export const latestVersion = migrations.at(-1)!.version;

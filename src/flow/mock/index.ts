@@ -6,14 +6,16 @@ import { randomUUID } from 'node:crypto';
 import type { Socket } from 'node:net';
 import { resolveFfmpeg } from '../../media/discovery.ts';
 import { runFfmpeg } from '../../media/runner.ts';
-import { loadSelectors } from '../selectors.ts';
 import { runtimeMp4 } from './mp4.ts';
 
 export const FAKE_FLOW_SELECTORS = Object.fromEntries(
-  Object.entries(loadSelectors(undefined, 'mock')).map(([name, entry]) => [name, entry.selector]),
+  ['login-email', 'login-submit', 'prompt-input', 'image-input', 'generate-button', 'credit-balance',
+    'job-item', 'job-status', 'video-result', 'download-link', 'error-banner', 'verify-challenge',
+    'verify-clear', 'prompt-textarea-v2', 'generate-button-v2'].map(name => [name, `[data-testid="${name}"]`]),
 ) as Record<string, string>;
 
 export interface FakeFlowOptions {
+  onGenerate?: () => void;
   credits?: number; cost?: number; delayMs?: number;
   rejectPrompt?: boolean | (string | RegExp)[];
   verification?: boolean; domVariant?: 'default' | 'changed'; jobFails?: boolean;
@@ -145,6 +147,7 @@ export async function startFakeFlow(options: FakeFlowOptions = {}) {
         if (closed) return;
         // Another upload may have completed while this request was writing its image.
         if (state.credits < scenario.cost) return send(402, { code: 'OUT_OF_CREDITS', message: 'Out of credits' });
+        scenario.onGenerate?.();
         state.credits -= scenario.cost;
         const job: Job = { id: randomUUID(), prompt, status: 'pending' }; state.jobs.push(job);
         const epoch = generation; const fails = scenario.jobFails;
