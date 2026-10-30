@@ -5,3 +5,4 @@ export * from './paths.ts';
 export * from './runner.ts';
 export * from './probe.ts';
 export * from './extract-frame.ts';
+export * from './crop-logo.ts';

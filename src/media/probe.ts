@@ -10,11 +10,13 @@ export interface MediaInfo {
   height: number;
   fps: number;
   hasAudio: boolean;
+  pixelFormat?: string;
 }
 
 export class MediaInputError extends MediaToolError {}
 
 interface ProbeStream {
+  pix_fmt?: string;
   codec_type?: string;
   width?: number;
   height?: number;
@@ -68,5 +70,6 @@ export async function probe(videoPath: string): Promise<MediaInfo> {
     width: video.width, height: video.height,
     fps: frameRate(video.avg_frame_rate) ?? frameRate(video.r_frame_rate) ?? 0,
     hasAudio: streams.some(stream => stream?.codec_type === 'audio'),
+    pixelFormat: video.pix_fmt,
   };
 }
