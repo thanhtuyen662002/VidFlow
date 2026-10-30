@@ -102,6 +102,17 @@ test('service-only project to package flow, every command returns safe data', as
   const blankSkip = await service.execute('script.skip', { projectId: p.id, reason: '   ' });
   assert.equal(blankSkip.ok, false);
   await run('script.skip', { projectId: p.id, reason: 'Owner reason' });
+  await run('settings.get', {});
+  await run('settings.configure', { enabled: false });
+  await run('settings.rotate', {});
+  await run('settings.revoke', {});
+  await run('budget.get', { projectId: p.id });
+  await run('budget.set', { projectId: p.id, limit: 1000 });
+  await run('render.cancel', { planId: plan.id });
+  const rework = await run<{ id: string }>('render.redo', { planId: plan.id, sceneId: plan.steps[0].sceneId });
+  await run('render.decideRedo', { requestId: rework.id, accept: false });
+  await run('storyboard.reject', { storyboardId: board.id });
+  await run('storyboard.approve', { storyboardId: board.id });
   assert.deepEqual([...called].sort(), service.listCommands().map(c => c.name).sort());
   await run('bible.update', { projectId: p.id, fields: { style: 'Changed lighting' } });
   const stale = await service.execute('render.run', { planId: plan.id, storyboardId: board.id });
@@ -137,4 +148,26 @@ test('service sources and their transitive imports have no Electron dependency',
     for (const match of source.matchAll(/(?:from\s*|import\s*\(?\s*)['"](\.[^'"]+\.ts)['"]/g)) inspect(join(path, '..', match[1]));
   }
   for (const name of readdirSync('src/service')) if (name.endsWith('.ts')) inspect(join('src/service', name));
+});
+
+
+test('workflow DTOs omit private account/session fields and MCP credentials before IPC', async t => {
+  const { service, db } = setup(t);
+  const account = await service.execute('account.create', { label: 'Owner' });
+  assert.equal(account.ok, true);
+  if (!account.ok) return;
+  const id = (account.data as { id: string }).id;
+  db.prepare('UPDATE flow_accounts SET status_reason=? WHERE id=?').run(JSON.stringify({ cookie: 'SECRET_COOKIE_VALUE', token: 'SECRET_TOKEN_VALUE', session: 'SECRET_SESSION_VALUE' }), id);
+  const accounts = await service.execute('account.list', {});
+  assert.equal(accounts.ok, true); scan(accounts);
+  if (accounts.ok) assert.deepEqual(Object.keys((accounts.data as object[])[0]).sort(), ['id', 'label', 'remainingCredits', 'status']);
+  await service.execute('settings.rotate', {});
+  const privateValue = service.mcpSettingsStore.getSettings().mcp!.token!;
+  assert.ok(privateValue);
+  const settings = await service.execute('settings.get', {});
+  assert.equal(settings.ok, true); scan(settings);
+  assert.ok(!JSON.stringify(settings).includes(privateValue));
+  if (settings.ok) assert.deepEqual(Object.keys(settings.data as object).sort(), ['credentialConfigured', 'credentialLocation', 'enabled']);
+  const revoked = await service.execute('settings.revoke', {}); scan(revoked);
+  assert.equal(service.mcpSettingsStore.getSettings().mcp!.token, undefined);
 });

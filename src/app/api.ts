@@ -2,6 +2,8 @@ import type { createIpcHandlers } from './ipc.ts';
 import type { RenderProgress } from '../service/progress.ts';
 type Result = Awaited<ReturnType<ReturnType<typeof createIpcHandlers>['handleInvoke']>>;
 export interface LegacyApi {
+  budget: import('../../renderer/src/workflow.ts').WorkflowControls['budget'];
+  settings: import('../../renderer/src/workflow.ts').WorkflowControls['settings'];
   project: { create(input: Record<string, unknown>): Promise<Result>; list(input: Record<string, unknown>): Promise<Result>; get(input: Record<string, unknown>): Promise<Result> };
   reference: { remove(input: Record<string, unknown>): Promise<Result>; add(input: Record<string, unknown>): Promise<Result>; list(input: Record<string, unknown>): Promise<Result> };
   bible: { update(input: Record<string, unknown>): Promise<Result> };
@@ -19,7 +21,7 @@ export interface LegacyApi {
 }
 export type { VidFlowApi } from './renderer-contract.ts';
 import type { VidFlowApi } from './renderer-contract.ts';
-export type VidflowApi = Omit<LegacyApi, 'bible' | 'script'> & VidFlowApi & {
+export type VidflowApi = Omit<LegacyApi, 'bible' | 'script'> & VidFlowApi & Pick<import('../../renderer/src/workflow.ts').WorkflowControls, 'storyboard' | 'render'> & {
   bible: LegacyApi['bible'] & VidFlowApi['bible'];
   script: LegacyApi['script'] & VidFlowApi['script'];
 };

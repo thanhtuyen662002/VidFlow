@@ -14,7 +14,7 @@ export function getSecureWebPreferences() {
 }
 
 /** Called by the application composition root with the same service instance as MCP. */
-export async function startElectron(services: Services & ProgressSource, rendererUrl: string, settings?: McpSettingsStore) {
+export async function startElectron(services: Services & ProgressSource & { mcpSettingsStore?: McpSettingsStore; useMcpSettingsStore?: (store: McpSettingsStore) => void }, rendererUrl: string, settings?: McpSettingsStore) {
   const { app, BrowserWindow, ipcMain } = await import('electron');
   const target = new URL(rendererUrl);
   if (target.protocol !== 'file:' && !(target.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(target.hostname))) throw new Error('Untrusted renderer URL');
@@ -22,8 +22,10 @@ export async function startElectron(services: Services & ProgressSource, rendere
     try { const candidate = new URL(url); return target.protocol === 'file:' ? candidate.protocol === 'file:' && candidate.pathname === target.pathname && candidate.host === target.host : candidate.origin === target.origin; } catch { return false; }
   };
   await app.whenReady();
-  const settingsDb = settings ? undefined : openDatabase();
-  const mcp = createMcpLifecycle(services, settings ?? createMcpSettingsStore(settingsDb!));
+  if (settings) services.useMcpSettingsStore?.(settings);
+  const sharedSettings = settings ?? services.mcpSettingsStore;
+  const settingsDb = sharedSettings ? undefined : openDatabase();
+  const mcp = createMcpLifecycle(services, sharedSettings ?? createMcpSettingsStore(settingsDb!));
   try { await mcp.start(); } catch (error) { await mcp.stop(); settingsDb?.close(); throw error; }
   let quitting = false;
   app.on('before-quit', event => {

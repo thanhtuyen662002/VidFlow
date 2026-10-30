@@ -24,3 +24,19 @@ export type ChainScene = { chainId: string; sceneId: string; position: number };
 
 export type ScriptApprovalInput = { scriptId: string; versionId: string };
 export type ScriptOverrideInput = ScriptApprovalInput & { warningId: string; reason: string };
+
+export type WorkflowBudget = { used: number; limit: number | null };
+export type WorkflowSettings = { enabled: boolean; credentialConfigured: boolean; credentialLocation: string };
+export type WorkflowRework = { id: string; sceneIds: string[]; estimatedCredits: number; state: string };
+export type WorkflowCommands = {
+  'storyboard.reject': { storyboardId: string };
+  'render.cancel': { planId: string };
+  'render.redo': { planId: string; sceneId: string };
+  'render.decideRedo': { requestId: string; accept: boolean };
+  'budget.get': { projectId: string };
+  'budget.set': { projectId: string; limit: number | null };
+  'settings.get': Record<string, never>;
+  'settings.configure': { enabled: boolean };
+  'settings.rotate': Record<string, never>;
+  'settings.revoke': Record<string, never>;
+};

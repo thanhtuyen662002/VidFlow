@@ -125,6 +125,17 @@ test('MCP HTTP: service-only project to package flow, every command returns safe
   const blankSkip = await service.execute('script.skip', { projectId: p.id, reason: '   ' });
   assert.equal(blankSkip.ok, false);
   await run('script.skip', { projectId: p.id, reason: 'Owner reason' });
+  await run('settings.get', {});
+  await run('settings.configure', { enabled: false });
+  await run('settings.rotate', {});
+  await run('settings.revoke', {});
+  await run('budget.get', { projectId: p.id });
+  await run('budget.set', { projectId: p.id, limit: 1000 });
+  await run('render.cancel', { planId: plan.id });
+  const rework = await run<{ id: string }>('render.redo', { planId: plan.id, sceneId: plan.steps[0].sceneId });
+  await run('render.decideRedo', { requestId: rework.id, accept: false });
+  await run('storyboard.reject', { storyboardId: board.id });
+  await run('storyboard.approve', { storyboardId: board.id });
   assert.deepEqual([...called].sort(), service.listCommands().map(c => c.name).sort());
   await run('bible.update', { projectId: p.id, fields: { style: 'Changed lighting' } });
   const stale = await service.execute('render.run', { planId: plan.id, storyboardId: board.id });
@@ -146,4 +157,5 @@ test('MCP HTTP: service-only project to package flow, every command returns safe
   scan(invalidOutput); assert.equal(invalidOutput.ok, false);
   if (!invalidOutput.ok) assert.equal(invalidOutput.error.code, 'INTERNAL_ERROR');
 });
+
 

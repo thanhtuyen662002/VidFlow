@@ -6,3 +6,10 @@ label { display: block; margin: 12px 0; } input:not([type=radio]), textarea, sel
 button { background: #166c65; color: white; border: none; border-radius: 6px; padding: 10px 16px; margin: 6px 8px 6px 0; font: inherit; cursor: pointer; } button:disabled { opacity: .45; cursor: default; } button[aria-pressed=true] { outline: 3px solid #e4b54c; }
 [role=alert] { color: #a52222; } article { border-bottom: 1px solid #dce3eb; padding: 12px; } :focus-visible { outline: 3px solid #ca9100; outline-offset: 2px; }
 @media (max-width: 720px) { main { padding: 16px; } .panels { display: block; } }
+.owner-notice { display: block; color: #743b00; background: #fff0cc; border: 2px solid #ad6500; padding: .6rem; margin: .5rem 0; }
+.take-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+.take-grid video { width: 100%; }
+.workflow { grid-column: 1 / -1; }
+.workflow nav { display: flex; flex-wrap: wrap; gap: .25rem; }
+.workflow ol > li { padding: .75rem 0; border-bottom: 1px solid #dce3eb; }
+.workflow [data-testid="render-budget"] { font-weight: 700; }

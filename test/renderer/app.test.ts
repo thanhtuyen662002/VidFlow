@@ -1,4 +1,4 @@
-import { after, afterEach, before, test } from 'node:test';
+﻿import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -9,6 +9,7 @@ import type { Root } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 import { build } from 'vite';
 import { mockApi } from './mockApi.ts';
+import { workflowFake } from './workflowFake.ts';
 
 let folder: string;
 let App: any;
@@ -167,4 +168,106 @@ test('a failed gate refresh clears loading and displays the preload error', asyn
   assert.equal(document.querySelector('.gate [role=alert]')!.textContent, 'Gate refresh failed');
   assert.equal(document.querySelector('.gate [role=status]'), null);
   assert.equal(document.querySelector('[data-testid=gate-status]'), null);
+});
+
+
+function byTestId(id: string): HTMLElement {
+  const element = document.querySelector(`[data-testid="${id}"]`);
+  assert.ok(element, id); return element as HTMLElement;
+}
+async function clickId(id: string) { await act(async () => byTestId(id).click()); }
+async function inputId(id: string, value: string) {
+  const element = byTestId(id) as HTMLInputElement;
+  const prototype = element.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(element, value);
+    element.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    element.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  });
+}
+async function submitId(id: string) {
+  await act(async () => byTestId(id).dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
+}
+async function createWorkflowProject(fake: ReturnType<typeof workflowFake>) {
+  await mount(fake.api);
+  await inputId('project-name', 'Phim thử nghiệm'); await submitId('project-form');
+  await waitFor(() => document.querySelector('[data-testid=tab-storyboard]'));
+}
+async function prepareRender(fake: ReturnType<typeof workflowFake>) {
+  await createWorkflowProject(fake);
+  await inputId('storyboard-version', 'o1'); await submitId('storyboard-form');
+  await clickId('storyboard-approve'); await clickId('tab-render'); await clickId('render-start');
+  await act(async () => fake.finishRender());
+}
+
+test('jsdom full flow: create project, reference, script, storyboard, render, select interval and export', async () => {
+  const fake = workflowFake(); await createWorkflowProject(fake);
+  assert.match(document.body.textContent!, /Phim thử nghiệm/);
+  await inputId('reference-name', 'Lan'); await inputId('reference-images', 'refs/lan.png'); await submitId('reference-form');
+  assert.match(document.body.textContent!, /@Lan/);
+  await clickId('script-option-o1'); await submitId('script-approve-form');
+  assert.equal(byTestId('gate-status').textContent, 'Đã duyệt');
+  assert.equal((byTestId('storyboard-version') as HTMLInputElement).value, 'o1');
+  await submitId('storyboard-form');
+  assert.match(byTestId('storyboard-shot-step').textContent!, /Lan đi qua khu vườn/);
+  await clickId('storyboard-approve'); assert.equal(byTestId('storyboard-status').textContent, 'Đã duyệt');
+  await clickId('tab-render'); await clickId('render-start'); await clickId('render-refresh');
+  assert.equal(byTestId('render-status').textContent, 'Đang chạy');
+  assert.match(byTestId('render-shot-step').textContent!, /Đang chạy/);
+  assert.equal((byTestId('render-cancel') as HTMLButtonElement).disabled, false);
+  await act(async () => fake.finishRender());
+  assert.equal(byTestId('render-status').textContent, 'Hoàn tất');
+  assert.match(byTestId('render-budget').textContent!, /20 \/ 100/);
+  await clickId('tab-takes');
+  assert.equal(byTestId('take-status-take').textContent, 'Chưa chọn');
+  await inputId('take-in-take', '1'); await inputId('take-out-take', '4'); await submitId('take-form-take');
+  assert.equal(byTestId('take-status-take').textContent, 'Đã chọn');
+  await clickId('tab-edit'); await clickId('edit-build');
+  assert.equal(byTestId('timeline-ready').textContent, 'Timeline đã sẵn sàng');
+  await act(async () => {
+    (byTestId('export-aspect') as HTMLSelectElement).value = '9:16';
+    byTestId('export-aspect').dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  });
+  await inputId('export-audio', 'exports/audio.wav'); await clickId('export-video');
+  assert.equal(byTestId('export-path').textContent, 'exports/final.mp4');
+  await clickId('export-capcut'); assert.equal(byTestId('export-path').textContent, 'exports/cc');
+  await inputId('package-cover', 'frames/cover.png'); await inputId('package-model', 'fake'); await clickId('export-package');
+  assert.equal(byTestId('export-path').textContent, 'exports/publish');
+  const mutations = ['project.create', 'reference.add', 'script.approve', 'storyboard.generate', 'storyboard.approve', 'render.enqueue', 'render.run', 'take.select', 'edit.assemble', 'edit.export', 'edit.capcut', 'export.package'];
+  assert.deepEqual(fake.calls.filter(call => mutations.includes(call.name)).map(call => call.name), mutations);
+  assert.deepEqual(fake.calls.find(call => call.name === 'take.select')!.input, { stepId: 'step', takeId: 'take', inPoint: 1, outPoint: 4 });
+  assert.deepEqual(fake.calls.find(call => call.name === 'render.run')!.input, { storyboardId: 'board', planId: 'plan' });
+  assert.deepEqual(fake.calls.find(call => call.name === 'edit.export')!.input, { timelineId: 'timeline', aspect: '9:16', mixedAudioPath: 'exports/audio.wav' });
+});
+
+test('Settings clearly marks needs_owner and never renders secret fields, including token rotation', async () => {
+  const fake = workflowFake(); await createWorkflowProject(fake); await clickId('tab-settings');
+  assert.equal(byTestId('account-needs-owner').textContent, 'Cần chủ sở hữu');
+  assert.match(document.body.textContent!, /đăng nhập hoặc xác minh/);
+  const assertPrivate = () => {
+    for (const secret of ['PRIVATE_COOKIE_SENTINEL', 'PRIVATE_TOKEN_SENTINEL', 'PRIVATE_SESSION_SENTINEL', 'PRIVATE_MCP_SENTINEL', 'PRIVATE_ROTATED_SENTINEL']) {
+      assert.ok(!document.body.textContent!.includes(secret), secret);
+      assert.ok(!document.body.innerHTML.includes(secret), secret);
+    }
+  };
+  assertPrivate(); assert.equal(byTestId('mcp-credential-status').textContent, 'Chưa thiết lập');
+  await clickId('mcp-toggle'); assert.equal(byTestId('mcp-enabled').textContent, 'Đang bật');
+  await clickId('mcp-rotate'); assert.equal(byTestId('mcp-credential-status').textContent, 'Đã thiết lập'); assertPrivate();
+  await clickId('mcp-revoke'); assert.equal(byTestId('mcp-credential-status').textContent, 'Chưa thiết lập');
+  await inputId('budget-limit', '250'); await submitId('budget-form'); assert.match(byTestId('settings-budget').textContent!, /250/);
+  assert.deepEqual(fake.calls.find(call => call.name === 'budget.set')!.input, { projectId: 'p2', limit: 250 });
+  for (const tab of ['storyboard', 'render', 'takes', 'edit', 'settings']) { await clickId(`tab-${tab}`); assertPrivate(); }
+});
+
+test('take interval errors are returned by service; storyboard rejection, cancellation and redo delegate', async () => {
+  const fake = workflowFake(); await prepareRender(fake);
+  await clickId('redo-step'); assert.match(byTestId('redo-confirmation').textContent!, /scene, next-scene.*40/);
+  await clickId('redo-approve'); assert.deepEqual(fake.calls.find(call => call.name === 'render.decideRedo')!.input, { requestId: 'rework', accept: true });
+  await clickId('tab-takes'); await inputId('take-in-take', '4'); await inputId('take-out-take', '1'); await submitId('take-form-take');
+  assert.equal(byTestId('workflow-error').textContent, 'Điểm ra phải lớn hơn điểm vào');
+  await clickId('tab-storyboard'); await clickId('storyboard-reject'); assert.equal(byTestId('storyboard-status').textContent, 'Bản nháp');
+  await clickId('storyboard-approve'); await clickId('tab-render'); await clickId('render-start'); await clickId('render-cancel');
+  assert.ok(fake.calls.some(call => call.name === 'render.cancel'));
+  assert.ok(fake.calls.some(call => call.name === 'storyboard.reject'));
+  await act(async () => root!.unmount()); root = undefined; assert.equal(fake.listeners.size, 0);
 });

@@ -37,12 +37,16 @@ script: Object.freeze({
   skip: (projectId, input) => unwrap('script:skip', { projectId, ...input })
 }),
 storyboard: Object.freeze({
+  reject: input => ipcRenderer.invoke('storyboard:reject', input),
   generate: input => ipcRenderer.invoke('storyboard:generate', input),
   approve: input => ipcRenderer.invoke('storyboard:approve', input),
   get: input => ipcRenderer.invoke('storyboard:get', input),
   preview: input => ipcRenderer.invoke('storyboard:preview', input)
 }),
 render: Object.freeze({
+  cancel: input => ipcRenderer.invoke('render:cancel', input),
+  redo: input => ipcRenderer.invoke('render:redo', input),
+  decideRedo: input => ipcRenderer.invoke('render:decideRedo', input),
   enqueue: input => ipcRenderer.invoke('render:enqueue', input),
   run: input => ipcRenderer.invoke('render:run', input),
   status: input => ipcRenderer.invoke('render:status', input)
@@ -73,6 +77,16 @@ credit: Object.freeze({
 }),
 queue: Object.freeze({
   list: input => ipcRenderer.invoke('queue:list', input)
+}),
+budget: Object.freeze({
+  get: input => ipcRenderer.invoke('budget:get', input),
+  set: input => ipcRenderer.invoke('budget:set', input)
+}),
+settings: Object.freeze({
+  get: input => ipcRenderer.invoke('settings:get', input),
+  configure: input => ipcRenderer.invoke('settings:configure', input),
+  rotate: input => ipcRenderer.invoke('settings:rotate', input),
+  revoke: input => ipcRenderer.invoke('settings:revoke', input)
 }),
 projects: Object.freeze({
   list: () => unwrap('project:list', {}),

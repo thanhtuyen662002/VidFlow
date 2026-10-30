@@ -5,7 +5,11 @@ import type { LlmClient } from '../script/llm/types.ts';
 import type { FlowJobDriver } from '../flow/jobDriver.ts';
 import type { JsonSchema, ValidationError } from '../script/llm/schema.ts';
 import { validateSchema } from '../script/llm/schema.ts';
-import { createProject, getProject, listProjects } from '../repo/projects.ts';
+import { createProject, getProject, listProjects, updateProject } from '../repo/projects.ts';
+import { projectCommittedCredits } from '../render/budget.ts';
+import { requestSceneRework, decideRework } from '../render/rework.ts';
+import { configureMcp, revokeMcp, createMcpSettingsStore } from '../app/mcp/settings.ts';
+import { rejectStoryboard } from '../script/storyboard.ts';
 import { BibleService } from '../prompt/bible.ts';
 import { getBible, setBible } from '../repo/bibles.ts';
 import { getScriptVariant } from '../repo/scripts.ts';
@@ -76,6 +80,12 @@ const storyboardSchema = object({ id: text, projectId: text, variantId: text, pl
 const takeSchema = output({ id: text, sceneId: text, renderJobId: text, file: text, durationSec: num, selected: { type: 'boolean' }, metadata: { type: 'object' } });
 export function createCoreService(deps: ServiceDependencies) {
   const { db } = deps;
+  let mcpSettingsStore = createMcpSettingsStore(db);
+  const activeRenders = new Map<string, AbortController>();
+  const settingsView = () => {
+    const config = mcpSettingsStore.getSettings().mcp;
+    return { enabled: config?.enabled ?? false, credentialConfigured: Boolean(config?.token), credentialLocation: 'Cơ sở dữ liệu riêng của VidFlow (app_mcp_settings)' };
+  };
   const progress = createProgressSource();
   const progressDriver: FlowJobDriver = { async run(job, account, ctx) {
     const event = (status: string) => progress.emit({ jobId: job.id, status, timestamp: (deps.clock?.() ?? new Date()).toISOString() });
@@ -100,6 +110,22 @@ export function createCoreService(deps: ServiceDependencies) {
   const project = (id: string) => need(getProject(db, id));
   const safeAccount = (a: NonNullable<ReturnType<typeof getAccount>>) => ({ id: a.id, label: a.label, status: a.status, remainingCredits: getBalance(db, String(a.id)) });
   const board = (id: string) => need(getStoryboard(db, id));
+  const budgetView = (id: string) => ({ used: projectCommittedCredits(db, project(id).id), limit: project(id).budget });
+  const budgetSchema = output({ used: num, limit: { type: ['number', 'null'] } });
+  const settingsSchema = output({ enabled: { type: 'boolean' }, credentialConfigured: { type: 'boolean' }, credentialLocation: text });
+  register('settings.get', object({}), settingsSchema, settingsView);
+  register<{ enabled: boolean }>('settings.configure', object({ enabled: { type: 'boolean' } }), settingsSchema, async i => {
+    await configureMcp(mcpSettingsStore, i.enabled, mcpSettingsStore.getSettings().mcp?.port ?? 0); return settingsView();
+  });
+  register('settings.rotate', object({}), settingsSchema, async () => {
+    const config = mcpSettingsStore.getSettings().mcp;
+    await configureMcp(mcpSettingsStore, true, config?.port ?? 0, true); return settingsView();
+  });
+  register('settings.revoke', object({}), settingsSchema, async () => { await revokeMcp(mcpSettingsStore); return settingsView(); });
+  register<{ projectId: string }>('budget.get', projectInput, budgetSchema, i => budgetView(i.projectId));
+  register<{ projectId: string; limit: number | null }>('budget.set', object({ projectId: text, limit: { type: ['number', 'null'], minimum: 0 } }), budgetSchema, i => {
+    project(i.projectId); updateProject(db, i.projectId, { budget: i.limit }); return budgetView(i.projectId);
+  });
   register<{ name: string; aspect: string; budget?: number }>('project.create', object({ name: { ...text, maxLength: 100 }, aspect: { type: 'string', enum: ['16:9', '9:16'] }, budget: num }, ['name', 'aspect']), projectSchema,
     i => createProject(db, i.name, i.aspect, i.budget ?? null));
   register('project.list', object({}), array(projectSchema), () => listProjects(db));
@@ -132,18 +158,27 @@ export function createCoreService(deps: ServiceDependencies) {
   });
   register<{ variantId: string }>('storyboard.generate', object({ variantId: text }), storyboardSchema, i => { need(getScriptVariant(db, i.variantId)); return generateStoryboard(db, i.variantId, deps.clock); });
   register<{ storyboardId: string }>('storyboard.approve', object({ storyboardId: text }), storyboardSchema, i => approveStoryboard(db, board(i.storyboardId), deps.clock));
+  register<{ storyboardId: string }>('storyboard.reject', object({ storyboardId: text }), storyboardSchema, i => rejectStoryboard(db, board(i.storyboardId)));
   register<{ storyboardId: string }>('storyboard.get', object({ storyboardId: text }), storyboardSchema, i => board(i.storyboardId));
   register<{ storyboardId: string; images: { sceneId: string; path: string; duration: number }[] }>('storyboard.preview', object({ storyboardId: text, images: { ...array(object({ sceneId: text, path: text, duration: { type: 'number', minimum: 0.001 } })), minItems: 1 } }), output({ path: text, args: array(text), timeoutMs: num }), i => storyboardPreviewPlan(db, board(i.storyboardId), i.images));
   register<{ storyboardId: string }>('render.enqueue', object({ storyboardId: text }), planSchema, i => approvedStoryboardPlan(db, board(i.storyboardId)));
   register<{ planId: string; storyboardId: string; takesPerScene?: number }>('render.run', object({ planId: text, storyboardId: text, takesPerScene: integer }, ['planId','storyboardId']), planSchema, async i => {
     const plan = approvedStoryboardPlan(db, board(i.storyboardId));
     if (plan.id !== i.planId) throw new ServiceError('PRECONDITION_FAILED', 'Storyboard does not approve this plan');
-    await runRenderPlan({ db, planId: i.planId, driver: progressDriver, reviewer: deps.reviewer ?? createLlmTakeReviewer(deps.llm),
+    if (activeRenders.has(i.planId)) throw new ServiceError('PRECONDITION_FAILED', 'Render is already running');
+    const controller = new AbortController(); activeRenders.set(i.planId, controller);
+    try { await runRenderPlan({ db, planId: i.planId, signal: controller.signal, driver: progressDriver, reviewer: deps.reviewer ?? createLlmTakeReviewer(deps.llm),
       takesPerScene: i.takesPerScene, clock: deps.clock, exitFrame: deps.exitFrame,
       duration: deps.duration ?? (async file => (await probe(file)).durationSec) });
+    } finally { activeRenders.delete(i.planId); }
     return need(getRenderPlan(db, i.planId));
   });
   register<{ planId: string }>('render.status', planInput, planSchema, i => need(getRenderPlan(db, i.planId)));
+  register<{ planId: string }>('render.cancel', planInput, planSchema, i => {
+    need(getRenderPlan(db, i.planId)); activeRenders.get(i.planId)?.abort(); return need(getRenderPlan(db, i.planId));
+  });
+  register<{ planId: string; sceneId: string }>('render.redo', object({ planId: text, sceneId: text }), output({ id: text, sceneIds: array(text), estimatedCredits: num, state: text }), i => requestSceneRework(db, i.planId, i.sceneId, {}));
+  register<{ requestId: string; accept: boolean }>('render.decideRedo', object({ requestId: text, accept: { type: 'boolean' } }), output({ id: text, state: text }), i => decideRework(db, i.requestId, i.accept));
   register<{ planId: string }>('take.list', planInput, array(takeSchema), i => need(getRenderPlan(db, i.planId)).steps.flatMap(s => listByScene(db, s.sceneId)));
   register<{ stepId: string; takeId: string; inPoint: number; outPoint: number }>('take.select', object({ stepId: text, takeId: text, inPoint: num, outPoint: num }), output({ takeId: text, inPoint: num, outPoint: num }), async i => {
     need(db.prepare('SELECT id FROM render_plan_steps WHERE id=?').get(i.stepId));
@@ -221,6 +256,8 @@ export function createCoreService(deps: ServiceDependencies) {
     },
   };
   return {
+    get mcpSettingsStore() { return mcpSettingsStore; },
+    useMcpSettingsStore(store: typeof mcpSettingsStore) { mcpSettingsStore = store; },
     onRenderProgress: progress.onRenderProgress,
     listCommands: service.listCommands,
     async execute(name: string, input: unknown): Promise<ServiceResult> {

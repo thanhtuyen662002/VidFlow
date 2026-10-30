@@ -63,6 +63,11 @@ export function approveStoryboard(db: DatabaseSync, board: Storyboard, clock = (
   assertStoryboardCurrent(db, board);
   return save(db, { ...board, status: 'approved', approvedAt: clock().toISOString() });
 }
+/** Rejection closes the approval gate without discarding the original shots. */
+export function rejectStoryboard(db: DatabaseSync, board: Storyboard): Storyboard {
+  assertStoryboardCurrent(db, board);
+  return save(db, { ...board, status: 'draft', approvedAt: null });
+}
 export function approvedStoryboardPlan(db: DatabaseSync, board: Storyboard): RenderPlan {
   if (board.status !== 'approved') throw new StoryboardGateError('Storyboard approval required');
   assertStoryboardCurrent(db, board);

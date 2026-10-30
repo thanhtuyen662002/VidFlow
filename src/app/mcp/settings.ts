@@ -32,3 +32,8 @@ export async function configureMcp(store: McpSettingsStore, enabled: boolean, po
     token: enabled && (rotate || !previous?.enabled || !previous.token)
       ? randomBytes(32).toString('base64url') : previous?.token } });
 }
+
+export async function revokeMcp(store: McpSettingsStore) {
+  const settings = store.getSettings();
+  await store.saveSettings({ ...settings, mcp: { enabled: false, port: settings.mcp?.port ?? 0 } });
+}
