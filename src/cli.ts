@@ -16,9 +16,11 @@ import { getBible } from './repo/bibles.ts';
 import { BibleService, UnregisteredReferenceError } from './prompt/bible.ts';
 import { compileSceneUnit } from './prompt/compiler.ts';
 import { runScript } from './script/cli.ts';
+import { runFlowSelftestCommand } from './flow/cli.ts';
 
 type IO = { stdout: Pick<NodeJS.WriteStream, 'write'>; stderr: Pick<NodeJS.WriteStream, 'write'> };
 const usage = `Usage: vidflow init
+       vidflow flow selftest [--profile mock|real] [--config <path>] [--url <url>]
        vidflow project create <name> --aspect <W:H> [--budget N]
        vidflow project list
        vidflow scene compile <project> <scene>
@@ -37,6 +39,11 @@ function details(project: Project): string {
 }
 
 export function run(argv: string[], io: IO = process): number | Promise<number> {
+  if (argv[0] === 'flow') {
+    if (argv[1] === 'selftest') return runFlowSelftestCommand(argv.slice(2), io);
+    io.stderr.write('vidflow: Cần flow selftest\n');
+    return 2;
+  }
   if (argv[0] === 'script') return runScript(argv.slice(1), io);
   let usageError = true;
   try {

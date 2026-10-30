@@ -1,0 +1,195 @@
+{
+  "mock": {
+    "promptInput": {
+      "selector": "[data-testid=\"prompt-input\"]"
+    },
+    "submitButton": {
+      "selector": "[data-testid=\"generate-button\"]"
+    },
+    "modelSelect": {
+      "selector": "[data-testid=\"model-select\"]"
+    },
+    "aspectRatioSelect": {
+      "selector": "[data-testid=\"aspect-ratio-select\"]"
+    },
+    "referenceUpload": {
+      "selector": "[data-testid=\"image-input\"]"
+    },
+    "generateButton": {
+      "selector": "[data-testid=\"generate-button\"]"
+    },
+    "progressIndicator": {
+      "selector": "[data-testid=\"job-status\"]"
+    },
+    "resultVideo": {
+      "selector": "[data-testid=\"video-result\"]"
+    },
+    "downloadButton": {
+      "selector": "[data-testid=\"download-link\"]"
+    },
+    "creditCounter": {
+      "selector": "[data-testid=\"credit-balance\"]"
+    },
+    "errorBanner": {
+      "selector": "[data-testid=\"error-banner\"]"
+    },
+    "accountMenu": {
+      "selector": "[data-testid=\"account-menu\"]"
+    },
+    "login-email": {
+      "selector": "[data-testid=\"login-email\"]"
+    },
+    "login-submit": {
+      "selector": "[data-testid=\"login-submit\"]"
+    },
+    "prompt-input": {
+      "selector": "[data-testid=\"prompt-input\"]"
+    },
+    "image-input": {
+      "selector": "[data-testid=\"image-input\"]"
+    },
+    "generate-button": {
+      "selector": "[data-testid=\"generate-button\"]"
+    },
+    "credit-balance": {
+      "selector": "[data-testid=\"credit-balance\"]"
+    },
+    "job-item": {
+      "selector": "[data-testid=\"job-item\"]"
+    },
+    "job-status": {
+      "selector": "[data-testid=\"job-status\"]"
+    },
+    "video-result": {
+      "selector": "[data-testid=\"video-result\"]"
+    },
+    "download-link": {
+      "selector": "[data-testid=\"download-link\"]"
+    },
+    "error-banner": {
+      "selector": "[data-testid=\"error-banner\"]"
+    },
+    "verify-challenge": {
+      "selector": "[data-testid=\"verify-challenge\"]"
+    },
+    "verify-clear": {
+      "selector": "[data-testid=\"verify-clear\"]"
+    },
+    "prompt-textarea-v2": {
+      "selector": "[data-testid=\"prompt-textarea-v2\"]"
+    },
+    "generate-button-v2": {
+      "selector": "[data-testid=\"generate-button-v2\"]"
+    }
+  },
+  "real": {
+    "promptInput": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "submitButton": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "modelSelect": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "aspectRatioSelect": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "referenceUpload": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "generateButton": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "progressIndicator": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "resultVideo": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "downloadButton": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "creditCounter": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "errorBanner": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "accountMenu": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "login-email": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "login-submit": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "prompt-input": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "image-input": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "generate-button": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "credit-balance": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "job-item": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "job-status": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "video-result": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "download-link": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "error-banner": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "verify-challenge": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "verify-clear": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "prompt-textarea-v2": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    },
+    "generate-button-v2": {
+      "selector": "",
+      "note": "Chủ sở hữu điền lần đầu qua `flow selftest`"
+    }
+  }
+}
