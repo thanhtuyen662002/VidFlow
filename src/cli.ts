@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { runRenderCommand } from './render/cli.ts';
+import { runEditCommand } from './edit/cli.ts';
 import { parseArgs } from 'node:util';
 import { constants, copyFileSync, lstatSync, unlinkSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
@@ -22,6 +23,7 @@ import { runFlowWorkerCommand } from './flow/workerCli.ts';
 
 type IO = { stdout: Pick<NodeJS.WriteStream, 'write'>; stderr: Pick<NodeJS.WriteStream, 'write'> };
 const usage = `Usage: vidflow init
+       vidflow timeline|export|package --help (dựng, xuất và gói xuất bản cục bộ)
        vidflow render --help (lập kế hoạch, chạy, trạng thái, take, in/out, ngân sách, làm lại)
        vidflow flow selftest [--profile mock|real] [--config <path>] [--url <url>]
        vidflow flow account list|show <id>|mark <id> <state>|reset <id>
@@ -45,6 +47,7 @@ function details(project: Project): string {
 }
 
 export function run(argv: string[], io: IO = process): number | Promise<number> {
+  if (['timeline', 'export', 'package'].includes(argv[0])) return runEditCommand(argv[0], argv.slice(1), io);
   if (argv[0] === 'render') return runRenderCommand(argv.slice(1), io);
   if (argv[0] === 'flow') {
     if (argv[1] === 'selftest') return runFlowSelftestCommand(argv.slice(2), io);
