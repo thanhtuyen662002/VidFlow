@@ -236,6 +236,13 @@ CREATE TABLE timeline_subtitle (
  start REAL NOT NULL CHECK(start>=0), end REAL NOT NULL CHECK(end>start),
  "order" INTEGER NOT NULL, UNIQUE(track_id,"order")
 );
+` }, { version: 15, name: 'Music library licences', sql: `
+CREATE TABLE music_tracks (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+ file TEXT NOT NULL, title TEXT NOT NULL,
+ has_license INTEGER NOT NULL DEFAULT 0 CHECK(has_license IN (0,1)),
+ license_source TEXT NOT NULL DEFAULT '', attribution TEXT NOT NULL DEFAULT ''
+);
 ` }];
 
 export const latestVersion = migrations.at(-1)!.version;
