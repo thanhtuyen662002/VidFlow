@@ -15,12 +15,18 @@ import { getScene, listScenes } from './repo/scenes.ts';
 import { getBible } from './repo/bibles.ts';
 import { BibleService, UnregisteredReferenceError } from './prompt/bible.ts';
 import { compileSceneUnit } from './prompt/compiler.ts';
+import { runScript } from './script/cli.ts';
 
 type IO = { stdout: Pick<NodeJS.WriteStream, 'write'>; stderr: Pick<NodeJS.WriteStream, 'write'> };
 const usage = `Usage: vidflow init
        vidflow project create <name> --aspect <W:H> [--budget N]
        vidflow project list
        vidflow scene compile <project> <scene>
+       vidflow script generate <project> --brief TEXT [--count N]
+       vidflow script score <variant> [--model NAME]
+       vidflow script revise <script> [version] --feedback TEXT [--model NAME]
+       vidflow script approve <script> [version]
+       vidflow script split <variant>
        vidflow project show <id|name>
        vidflow ref add <project> <image> --name <n> --role <character|location|prop|style> --description <d> --priority <integer>
        vidflow ref list <project> (priority ascending, then name)
@@ -30,7 +36,8 @@ function details(project: Project): string {
   return `ID: ${project.id}\nTên: ${project.name}\nAspect: ${project.aspect}\nBudget: ${project.budget ?? 'chưa đặt'}\nTrạng thái: ${project.status}\nThư mục: ${project.directory}\nNgày tạo: ${project.created_at}\n`;
 }
 
-export function run(argv: string[], io: IO = process): number {
+export function run(argv: string[], io: IO = process): number | Promise<number> {
+  if (argv[0] === 'script') return runScript(argv.slice(1), io);
   let usageError = true;
   try {
     const command = argv[0];
@@ -120,4 +127,4 @@ export function run(argv: string[], io: IO = process): number {
   }
 }
 
-if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) process.exitCode = run(process.argv.slice(2));
+if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) process.exitCode = await run(process.argv.slice(2));

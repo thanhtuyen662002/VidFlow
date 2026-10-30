@@ -4,6 +4,15 @@ import { repository, transaction } from './records.ts';
 const sceneRepo = repository<Scene>('scenes', {"projectId":"","scriptVariantId":null,"chainId":null,"index":0,"title":"","prompt":"","status":"draft","beat":"","durationUsed":0,"moment":"","camera":"","action":"","dialogue":"","sfx":"","charactersPresent":[],"location":"","transition":"cut","groupId":null,"mode":"text","createdAt":"","updatedAt":""}, ["charactersPresent"], []);
 export const getScene = sceneRepo.get;
 
+/** Replace one variant's scenes atomically, without nesting repository transactions. */
+export function replaceScenes(db: DatabaseSync, projectId: string, scriptVariantId: string,
+ inputs: Partial<Omit<Scene, 'id'>>[]): Scene[] {
+ return transaction(db, () => {
+  db.prepare('DELETE FROM scenes WHERE project_id=? AND script_variant_id=?').run(projectId, scriptVariantId);
+  return inputs.map((input, index) => sceneRepo.create(db, { ...input, projectId, scriptVariantId, index }));
+ });
+}
+
 
 
 
