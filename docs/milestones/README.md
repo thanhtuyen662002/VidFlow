@@ -24,6 +24,7 @@ Nói với Claude, khi Claude đã kết nối MCP của Agent Forge:
 5. **M7**
 6. **M8**
 7. **M9**
+8. **M10**: motion control, sau M8 (dùng lại media, LLM, Flow, render, dựng và giao diện).
 
 ## Quy tắc chung cho mọi mốc
 
