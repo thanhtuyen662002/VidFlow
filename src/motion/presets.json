@@ -1,0 +1,7 @@
+{
+  "replace-character": "Replace mapped characters using registered references.",
+  "replace-scene": "Replace the mapped background using registered references.",
+  "faceless-animation": "Animated scene. No visible human faces. Show only hands, tools and subjects without faces.",
+  "animation-2d": "2D animation.",
+  "animation-3d": "3D animation."
+}

@@ -29,7 +29,7 @@ export function getSourceVideo(db: DatabaseSync, id: string): SourceVideo {
   return video;
 }
 export function listSegments(db: DatabaseSync, id: string): SourceSegment[] {
-  return db.prepare('SELECT * FROM source_segments WHERE source_video_id=? ORDER BY idx').all(id).map(row => ({ ...row })) as unknown as SourceSegment[];
+  return db.prepare('SELECT id,source_video_id,idx,scene_index,start_sec,end_sec,start_frame,end_frame,frame_count,origin,created_at,updated_at FROM source_segments WHERE source_video_id=? ORDER BY idx').all(id).map(row => ({ ...row })) as unknown as SourceSegment[];
 }
 function options(video?: SourceVideo, input: SegmentOptions = {}) {
   const sceneThreshold = input.sceneThreshold ?? video?.scene_threshold ?? 0.3;
@@ -66,7 +66,7 @@ function replaceSegments(db: DatabaseSync, video: SourceVideo, frames: number[],
   db.exec('BEGIN IMMEDIATE');
   try {
     db.prepare('DELETE FROM source_segments WHERE source_video_id=?').run(video.id);
-    const insert = db.prepare('INSERT INTO source_segments VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+    const insert = db.prepare('INSERT INTO source_segments (id,source_video_id,idx,scene_index,start_sec,end_sec,start_frame,end_frame,frame_count,origin,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const row of rows) insert.run(row.id,row.source_video_id,row.idx,row.scene_index,row.start_sec,row.end_sec,row.start_frame,row.end_frame,row.frame_count,row.origin,row.created_at,row.updated_at);
     db.prepare('UPDATE source_videos SET scene_threshold=?,max_segment_sec=?,min_scene_sec=? WHERE id=?').run(config.sceneThreshold,config.maxSegmentSec,config.minSceneSec,video.id);
     if (saveOwner) db.prepare('UPDATE source_videos SET owner_cuts=? WHERE id=?').run(JSON.stringify(frames.map(frame => frame/video.fps)),video.id);
