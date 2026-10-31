@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- VidFlow brand mark; config/generate-icon.py renders the same geometry into build/icon.ico. -->
+  <defs>
+    <linearGradient id="vf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF8A3D"/>
+      <stop offset="0.5" stop-color="#EC4878"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#vf)"/>
+  <g stroke="#fff" stroke-opacity="0.84" stroke-width="30" stroke-linecap="round">
+    <path d="M128 208H178M100 256H186M128 304H178"/>
+  </g>
+  <polygon points="226,154 226,358 396,256" fill="#fff" stroke="#fff" stroke-width="26" stroke-linejoin="round"/>
+</svg>

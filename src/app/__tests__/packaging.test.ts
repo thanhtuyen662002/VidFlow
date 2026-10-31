@@ -20,7 +20,9 @@ test('Windows package is an unsigned x64 NSIS installer with a narrow whitelist'
     assert.ok(entries.includes(`!${excluded}`), `Missing exclusion: ${excluded}`);
   }
   assert.doesNotMatch(yaml, /^\s*(certificateFile|certificatePassword|sign|signingHashAlgorithms|azureSignOptions)\s*:/m);
-  assert.match(yaml, /signAndEditExecutable: false/);
+  assert.match(yaml, /signExecutable: false/);
+  assert.doesNotMatch(yaml, /signAndEditExecutable: false/); // That would also skip the icon.
+  assert.match(yaml, /icon: build\/icon\.ico/);
   assert.match(yaml, /oneClick: true/);
   assert.match(yaml, /perMachine: false/);
   assert.match(yaml, /runAfterFinish: true/);

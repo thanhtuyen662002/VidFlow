@@ -11,6 +11,18 @@ const message = (error: unknown) =>
   error !== null && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
     ? error.message : String(error);
 
+/** Same geometry as renderer/public/favicon.svg and the app icon (config/generate-icon.py). */
+function BrandMark() {
+  return <svg className="brand-mark" viewBox="0 0 512 512" width="28" height="28" aria-hidden="true">
+    <defs><linearGradient id="vf-brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stopColor="#FF8A3D" /><stop offset="0.5" stopColor="#EC4878" /><stop offset="1" stopColor="#7C3AED" />
+    </linearGradient></defs>
+    <rect width="512" height="512" rx="116" fill="url(#vf-brand)" />
+    <path d="M128 208H178M100 256H186M128 304H178" stroke="#fff" strokeOpacity="0.84" strokeWidth="30" strokeLinecap="round" />
+    <polygon points="226,154 226,358 396,256" fill="#fff" stroke="#fff" strokeWidth="26" strokeLinejoin="round" />
+  </svg>;
+}
+
 export function App() {
   const connection = useMemo(() => {
     try {
@@ -43,7 +55,7 @@ function ProjectsView({ api }: { api: VidflowApi }) {
     }
     void loadProjects();
   }, [api]);
-  return <main><header><p>VIDFLOW</p><h1>Xưởng video của bạn</h1><p>Dự án · Tham chiếu · Kịch bản</p></header>
+  return <main><header><p className="brand"><BrandMark />VIDFLOW</p><h1>Xưởng video của bạn</h1><p>Dự án · Tham chiếu · Kịch bản</p></header>
     <section aria-label="Dự án"><h2>Dự án</h2>{error && <p role="alert">{error}</p>}{busy && <p role="status">Đang tải…</p>}
       <form data-testid="project-form" onSubmit={async e => {
         e.preventDefault();

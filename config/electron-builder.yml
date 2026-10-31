@@ -29,11 +29,15 @@ win:
     - target: nsis
       arch:
         - x64
-  signAndEditExecutable: false
+  # Rendered by config/generate-icon.py. Skip code signing but keep editing the exe so it gets the icon and metadata.
+  icon: build/icon.ico
+  signExecutable: false
 forceCodeSigning: false
 nsis:
   # One click installs everything for the current user (no admin prompt) and starts VidFlow.
   oneClick: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
   perMachine: false
   createDesktopShortcut: always
   createStartMenuShortcut: true
