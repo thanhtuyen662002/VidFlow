@@ -30,6 +30,11 @@ export interface MotionState {
   variants: { id: string; file: string; aiGenerated: true }[]; selectedVariantId?: string;
   chainInFrame?: string; chainInFrameSha256?: string; chainOutFrame?: string; chainOutFrameSha256?: string;
   generation: number;
+  ownerVariantId?: string;
+  reviews?: Record<string, { score?: number; face_detected?: boolean; error?: string }>;
+  reviewKey?: string;
+  reviewFailure?: string;
+  assembly?: { key: string; stretched?: string; joined?: string; muxed?: string; exported?: string };
 }
 const fresh = (): MotionState => ({ status: 'pending', steps: {}, operations: [], variants: [], generation: 0 });
 export function getMotionState(db: DatabaseSync, segmentId: string): MotionState | undefined {
@@ -80,7 +85,9 @@ export function selectVariant(db: DatabaseSync, segmentId: string, variantId: st
     if (row.status === 'running') throw new Error('Stop the worker before changing a running segment selection');
     const state = getMotionState(db, segmentId)!;
     if (!state.variants.some(v => v.id === variantId)) throw new Error('Variant must belong to segment');
-    if (state.selectedVariantId === variantId) return;
+    state.ownerVariantId = variantId;
+    if (state.reviewFailure) { state.status = 'done'; delete state.reviewFailure; }
+    if (state.selectedVariantId === variantId) { save(db, String(row.id), state); return; }
     state.selectedVariantId = variantId;
     delete state.chainOutFrame; delete state.chainOutFrameSha256;
     delete state.steps.exitFrame;

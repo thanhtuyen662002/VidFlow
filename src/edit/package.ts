@@ -17,6 +17,9 @@ export interface MusicLicense {
   trackId: string; title: string; source: string; licenseType: string;
   proof: string; status: 'licensed' | 'unlicensed' | 'unknown';
 }
+export function aiDisclosure(tools: string[]) {
+  return { madeWithAI: true, statement: `Nội dung này được tạo bằng AI. Công cụ/mô hình: ${tools.join(', ')}.`, tools };
+}
 export interface PackageManifest {
   projectId: string; state: 'draft' | 'ready_to_publish';
   files: { path: string; sha256: string; size: number; role: string; status: string }[];
@@ -106,7 +109,7 @@ export async function buildPublishPackage(input: {
   const cover = input.coverPath ?? (await extractFrame(project.directory, input.videos[0].path, 0, { fileName: `cover-${randomUUID()}.png` })).path;
   await copy(cover, 'cover.png', 'cover');
   const tools = ['Google Flow/Veo', input.llmModel, ...(input.ttsModel ? [input.ttsModel] : [])];
-  const statement = `Nội dung này được tạo bằng AI. Công cụ/mô hình: ${tools.join(', ')}.`;
+  const { statement } = aiDisclosure(tools);
   await save('ai-disclosure.json', JSON.stringify({ madeWithAI: true, statement, tools }, null, 2), 'ai-disclosure');
   await save('ai-disclosure.txt', statement + '\n', 'ai-disclosure');
   await save('description.json', JSON.stringify({ ...suggestion, aiDisclosure: statement }, null, 2), 'description');

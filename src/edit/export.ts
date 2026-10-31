@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile, unlink } from 'node:fs/promises';
+import { mkdir, writeFile, unlink, rename } from 'node:fs/promises';
 import { basename, relative } from 'node:path';
 import { dataDirectory, resolveInside } from '../paths.ts';
 import { assertInsideDataDir, assertSafeOutputPath } from '../media/paths.ts';
@@ -11,6 +11,59 @@ import type { Timeline } from './timeline.ts';
 import { buildCapcutDraft, writeCapcutDraft } from './capcut.ts';
 import { createLogger } from '../logger.ts';
 import { redactString } from '../redact.ts';
+import { probe } from '../media/probe.ts';
+import { concatSegments } from '../media/concat-segments.ts';
+import { aiDisclosure } from './package.ts';
+
+/** M7 extension for source-timed footage. No spatial crop or audio retiming. */
+export async function stretchVideo(projectDir: string, input: string, frames: number, fps: number) {
+  if (!Number.isSafeInteger(frames) || frames < 1 || !Number.isFinite(fps) || fps <= 0) throw new Error('Invalid target timing');
+  const info = await probe(input);
+  if (info.durationSec <= 0) throw new Error('Empty candidate');
+  return atomicVideo(projectDir, [input], (files, out) => ['-i', files[0], '-an', '-vf',
+    `setpts=(PTS-STARTPTS)*${frames / fps / info.durationSec},fps=${fps},tpad=stop_mode=clone:stop_duration=${frames / fps},trim=end_frame=${frames},setpts=N/(${fps}*TB)`,
+    '-frames:v', String(frames), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', out]);
+}
+
+async function atomicVideo(projectDir: string, inputs: string[], args: (files: string[], out: string) => string[]) {
+  const root = assertInsideDataDir(projectDir, dataDirectory());
+  const path = resolveInside(root, `exports/${randomUUID()}.mp4`);
+  const temporary = resolveInside(root, `exports/${randomUUID()}.partial.mp4`);
+  await mkdir(resolveInside(root, 'exports'), { recursive: true });
+  try {
+    await runMediaFiles('ffmpeg', (files, out) => args(files, out!), {
+      dataDir: dataDirectory(), projectDir: root, inputPaths: inputs, outputPath: temporary, timeoutMs: 300000,
+    });
+    assertSafeOutputPath(path, { dataDir: dataDirectory(), projectDir: root, inputPaths: inputs });
+    await rename(temporary, path);
+    return path;
+  } finally { await unlink(temporary).catch(() => {}); }
+}
+
+export async function joinTimedVideos(projectDir: string, paths: string[], fps: number, width: number, height: number) {
+  return (await concatSegments(projectDir, paths.map(path => ({ path, in: 0 })), {
+    fps, width, height, outputName: `motion-${randomUUID()}.mp4`,
+  })).path;
+}
+
+/** Audio is taken once from the full source, preserving scene offsets. */
+export async function muxSourceAudio(projectDir: string, joined: string, source: string, keepOriginalAudio: boolean, duration: number) {
+  const audio = keepOriginalAudio && (await probe(source)).hasAudio;
+  return atomicVideo(projectDir, [joined, source], (files, out) => ['-i', files[0], '-i', files[1],
+    '-map', '0:v:0', ...(audio ? ['-map', '1:a:0', '-c:a', 'aac'] : ['-an']),
+    '-c:v', 'copy', '-t', String(duration), '-metadata', `comment=${aiDisclosure(['Google Flow/Veo']).statement}`,
+    '-movflags', '+faststart', out]);
+}
+
+export async function discloseVideo(projectDir: string, path: string) {
+  assertInsideDataDir(path, resolveInside(projectDir, 'exports'));
+  const sidecar = `${path}.ai-disclosure.json`, temporary = `${sidecar}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, JSON.stringify(aiDisclosure(['Google Flow/Veo']), null, 2), { flag: 'wx' });
+    await rename(temporary, sidecar);
+  } finally { await unlink(temporary).catch(() => {}); }
+  return path;
+}
 
 /** Two ffmpeg filter-parser escaping levels, including Windows drive colons. */
 export function escapeSubtitlePath(path: string): string {
