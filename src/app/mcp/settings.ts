@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
-export interface McpSettings { mcp?: { enabled?: boolean; port?: number; token?: string } }
+export interface McpSettings { mcp?: { enabled?: boolean; port?: number; token?: string }; updates?: { channel?: 'dev'; sourceUrl?: string } }
 /** The application supplies its persistent, private settings backend. No credentials in IPC. */
 export interface McpSettingsStore {
   getSettings(): McpSettings;
@@ -15,7 +15,7 @@ export function createMcpSettingsStore(db: DatabaseSync): McpSettingsStore {
   return {
     getSettings() {
       const row = db.prepare('SELECT value FROM app_mcp_settings WHERE id=1').get() as { value: string } | undefined;
-      return row ? JSON.parse(row.value) as McpSettings : { mcp: { enabled: false, port: 0 } };
+      return row ? JSON.parse(row.value) as McpSettings : { mcp: { enabled: false, port: 0 }, updates: { channel: 'dev', sourceUrl: '' } };
     },
     saveSettings(settings) {
       db.prepare('INSERT INTO app_mcp_settings(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value').run(JSON.stringify(settings));
@@ -23,6 +23,14 @@ export function createMcpSettingsStore(db: DatabaseSync): McpSettingsStore {
     },
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   };
+}
+/** Owner-managed source; no bundled production endpoint. Preserve private MCP settings. */
+export async function configureUpdates(store: McpSettingsStore, sourceUrl: string) {
+  if (sourceUrl) {
+    const url = new URL(sourceUrl);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Invalid update source URL');
+  }
+  await store.saveSettings({ ...store.getSettings(), updates: { channel: 'dev', sourceUrl } });
 }
 export async function configureMcp(store: McpSettingsStore, enabled: boolean, port = 0, rotate = false) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid MCP port');

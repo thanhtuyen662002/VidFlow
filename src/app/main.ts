@@ -7,6 +7,10 @@ import { createMcpLifecycle } from './mcp/lifecycle.ts';
 import type { McpSettingsStore } from './mcp/settings.ts';
 import { createMcpSettingsStore } from './mcp/settings.ts';
 import { openDatabase } from '../db.ts';
+import { createUpdater } from './updater.ts';
+import { withUpdates } from './update-service.ts';
+import { dataDirectory, resolveInside } from '../paths.ts';
+import { spawn } from 'node:child_process';
 
 export function getSecureWebPreferences() {
   return { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,
@@ -15,7 +19,7 @@ export function getSecureWebPreferences() {
 
 /** Called by the application composition root with the same service instance as MCP. */
 export async function startElectron(services?: Services & ProgressSource & { mcpSettingsStore?: McpSettingsStore; useMcpSettingsStore?: (store: McpSettingsStore) => void }, rendererUrl = new URL('../renderer/dist/index.html', import.meta.url).href, settings?: McpSettingsStore) {
-  const { app, BrowserWindow, ipcMain } = await import('electron');
+  const { app, BrowserWindow, ipcMain, dialog } = await import('electron');
   if (!services) {
     process.env.VIDFLOW_HOME ||= app.getPath('userData');
     const [{ createCoreService }, { configuredLlm }, { createPageDriver }, { launchFlowContext }] = await Promise.all([
@@ -39,7 +43,29 @@ export async function startElectron(services?: Services & ProgressSource & { mcp
   if (settings) services.useMcpSettingsStore?.(settings);
   const sharedSettings = settings ?? services.mcpSettingsStore;
   const settingsDb = sharedSettings ? undefined : openDatabase();
-  const mcp = createMcpLifecycle(services, sharedSettings ?? createMcpSettingsStore(settingsDb!));
+  const store = sharedSettings ?? createMcpSettingsStore(settingsDb!);
+  let commands: Services = services;
+  if (app.isPackaged || process.env.VIDFLOW_ENABLE_UPDATES === '1') {
+    const updater = createUpdater({
+      config: () => ({ channel: store.getSettings().updates?.channel ?? 'dev', sourceUrl: store.getSettings().updates?.sourceUrl ?? '' }),
+      currentVersion: app.getVersion(), directory: resolveInside(dataDirectory(), 'updates'),
+      confirm: async manifest => (await dialog.showMessageBox({ type: 'question',
+        title: 'Cập nhật VidFlow', message: `Cài phiên bản ${manifest.version}?`, detail: manifest.releaseNotes ?? '',
+        buttons: ['Cài và khởi động lại', 'Để sau'], defaultId: 1, cancelId: 1, noLink: true })).response === 0,
+      install: async file => {
+        if (process.platform !== 'win32') throw Object.assign(new Error('Windows only'), { code: 'UNSUPPORTED_PLATFORM' });
+        await new Promise<void>((resolve, reject) => {
+          const child = spawn(file, [], { detached: true, stdio: 'ignore', windowsHide: true, timeout: 120000 });
+          child.once('error', reject);
+          child.once('spawn', () => { child.unref(); resolve(); });
+        });
+        app.quit();
+      },
+    });
+    commands = withUpdates(services, updater);
+    if (store.getSettings().updates?.sourceUrl) void updater.check().catch(() => {});
+  }
+  const mcp = createMcpLifecycle(commands, store);
   try { await mcp.start(); } catch (error) { await mcp.stop(); settingsDb?.close(); throw error; }
   let quitting = false;
   app.on('before-quit', event => {
@@ -48,7 +74,7 @@ export async function startElectron(services?: Services & ProgressSource & { mcp
     void mcp.stop().finally(() => { settingsDb?.close(); quitting = true; app.quit(); });
   });
   const windows = new Set<InstanceType<typeof BrowserWindow>>();
-  const unregister = registerIpc(ipcMain, services, event => {
+  const unregister = registerIpc(ipcMain, commands, event => {
     const e = event as Electron.IpcMainInvokeEvent;
     return [...windows].some(w => !w.isDestroyed() && e.sender === w.webContents && e.senderFrame === w.webContents.mainFrame && trusted(e.senderFrame.url));
   });
