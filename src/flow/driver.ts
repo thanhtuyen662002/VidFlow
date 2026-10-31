@@ -8,7 +8,7 @@ import { saveNote } from './evidence.ts';
 import { setAccountStatus } from './accounts.ts';
 import { chargeJob } from './credits.ts';
 import { getJob } from './queue.ts';
-import { flowPatterns, loadSelectors } from './selectors.ts';
+import { flowPatterns, loadSelectors, motionRoles } from './selectors.ts';
 import type { Selectors } from './selectors.ts';
 export type { FlowJobDriver } from './jobDriver.ts';
 
@@ -29,7 +29,7 @@ export type FlowJobResult =
   | { kind: 'rejected'; reason: string; rawMessage?: string }
   | { kind: 'out_of_credits'; creditsSeen?: number }
   | { kind: 'verification_required'; detectedBy: string; url: string }
-  | { kind: 'failed'; error: string; retryable: boolean };
+  | { kind: 'failed'; error: string; retryable: boolean; detail?: string };
 export interface FlowJob { id: string; projectId: string; accountId: string; prompt: string; images?: string[]; outputDir: string; takeIndex?: number }
 export interface ActionEntry { seq: number; ts: string; action: 'goto' | 'fill' | 'click' | 'upload' | 'download' | 'read'; target: string }
 export interface FlowDriverContext {
@@ -60,9 +60,11 @@ class VerificationStop extends Error {
 /** Every page operation lives here. Logs contain symbolic targets only, never input values. */
 class ActionRecorder implements FlowPage {
   page: Page; ctx: FlowDriverContext; selectors: Selectors; seq = 0; stopped?: VerificationStop;
+  lastAction?: ActionEntry;
   constructor(page: Page, ctx: FlowDriverContext) { this.page = page; this.ctx = ctx; this.selectors = ctx.selectors ?? loadSelectors(undefined, 'real'); }
   log(action: ActionEntry['action'], target: string) {
     const entry = redactObject({ seq: ++this.seq, ts: new Date().toISOString(), action, target }) as ActionEntry;
+    this.lastAction = entry;
     this.ctx.record?.(entry);
   }
   selector(name: string) {
@@ -120,6 +122,100 @@ class ActionRecorder implements FlowPage {
   static async create(ctx: FlowDriverContext) {
     const page = ctx.browser.pages()[0] ?? await ctx.browser.newPage();
     return new ActionRecorder(page, ctx);
+  }
+}
+
+export interface VideoEditJob extends FlowJob {
+  sourceVideo: string;
+  references?: Partial<Record<typeof motionRoles[number], string[]>>;
+  variants: number;
+}
+export interface FrameImageJob extends FlowJob {
+  references?: VideoEditJob['references'];
+  frameKind: 'first_frame' | 'last_frame';
+}
+export type MotionResult = Exclude<FlowJobResult, { kind: 'completed' }> | {
+  kind: 'completed'; files: string[]; creditsBefore: number; creditsAfter: number;
+  creditsCharged: number; durationMs: number; accountId: string;
+};
+export function editVideo(job: VideoEditJob, ctx: FlowDriverContext): Promise<MotionResult> {
+  return runMotion(job, ctx, 'videoEdit');
+}
+export function generateFrameImage(job: FrameImageJob, ctx: FlowDriverContext): Promise<MotionResult> {
+  return runMotion(job, ctx, 'frameImage');
+}
+async function runMotion(job: VideoEditJob | FrameImageJob, ctx: FlowDriverContext, group: 'videoEdit' | 'frameImage'): Promise<MotionResult> {
+  let recorder: ActionRecorder | undefined;
+  const started = Date.now();
+  try {
+    if (!Number.isFinite(ctx.timeoutMs) || ctx.timeoutMs <= 0 || !/^[a-z0-9_-]+$/i.test(job.id)) throw new Error('Invalid job');
+    // Frame callers may spread a video job; mode, not incidental fields, selects controls.
+    const count = group === 'videoEdit' ? (job as VideoEditJob).variants : 1;
+    if (!Number.isSafeInteger(count) || count < 1) throw new Error('Invalid variants');
+    if ('frameKind' in job && !['first_frame', 'last_frame'].includes(job.frameKind)) throw new Error('Invalid frame kind');
+    if (!getJob(ctx.db, job.id) || ctx.db.prepare('SELECT 1 FROM credit_ledger WHERE job_id=? AND amount IS NOT NULL').get(job.id)) throw new Error('Job unavailable or already charged');
+    const account = ctx.db.prepare('SELECT status FROM flow_accounts WHERE id=?').get(job.accountId);
+    if (account?.status !== 'ready') throw new Error('Account unavailable');
+    const root = projectDirectory(job.projectId);
+    const renders = resolveInside(root, 'renders');
+    const output = job.outputDir === renders ? renders : resolveInside(renders, relative(renders, job.outputDir));
+    const input = (file: string) => resolveInside(root, relative(root, file));
+    const source = group === 'videoEdit' ? input((job as VideoEditJob).sourceVideo) : undefined;
+    const references = motionRoles.map(role => [role, (job.references?.[role] ?? []).map(input)] as const);
+    mkdirSync(output, { recursive: true });
+    const suffix = group === 'videoEdit' ? 'mp4' : 'png';
+    const files = Array.from({ length: count }, (_, i) => resolveInside(output, `${job.id}_${group === 'videoEdit' ? 'edit' : (job as FrameImageJob).frameKind}_${i + 1}.${suffix}`));
+    if (files.some(existsSync)) throw new Error('Original take already exists');
+    recorder = await ActionRecorder.create(ctx);
+    const r = recorder;
+    const control = (name: string) => r.page.locator(r.selector(`${group}.${name}`));
+    const fill = async (name: string, value: string) => { await r.guard(); r.log('fill', `${group}.${name}`); await control(name).fill(value, { timeout: ctx.timeoutMs }); };
+    const upload = async (name: string, paths: string[]) => { await r.guard(); r.log('upload', `${group}.${name}`); await control(name).setInputFiles(paths, { timeout: ctx.timeoutMs }); };
+    await r.goto(ctx.url); await r.click(`${group}.entry`);
+    const creditsBefore = await r.credits();
+    if (source) await upload('video', [source]);
+    for (const [role, paths] of references) if (paths.length) await upload(role, paths);
+    await fill('prompt', job.prompt);
+    if (group === 'videoEdit') await fill('variants', String(count));
+    else { await r.guard(); r.log('fill', 'frameImage.kind'); await control('kind').selectOption((job as FrameImageJob).frameKind, { timeout: ctx.timeoutMs }); }
+    await r.click(`${group}.submit`);
+    while (Date.now() - started < ctx.timeoutMs) {
+      await r.guard();
+      const error = await r.text('errorBanner');
+      if (flowPatterns.noCredit.test(error)) { setAccountStatus(ctx.db, job.accountId, 'out_of_credit'); return { kind: 'out_of_credits' }; }
+      if (error) return { kind: 'failed', error: 'Flow generation failed', retryable: false };
+      r.log('read', `${group}.finished`);
+      if (await control('finished').isVisible() && await control('download').count() === count) {
+        for (let i = 0; i < count; i++) {
+          await r.guard();
+          const pending = r.page.waitForEvent('download', { timeout: ctx.timeoutMs }); void pending.catch(() => {});
+          r.log('click', `${group}.download`); await control('download').nth(i).click({ timeout: ctx.timeoutMs });
+          const download = await pending; await r.guard();
+          r.log('download', 'generated-file'); await download.saveAs(files[i] + '.partial');
+          renameSync(files[i] + '.partial', files[i]);
+        }
+        const creditsAfter = await r.credits(); const creditsCharged = creditsBefore - creditsAfter;
+        chargeJob(ctx.db, job.accountId, job.id, creditsCharged);
+        return { kind: 'completed', files, creditsBefore, creditsAfter, creditsCharged, durationMs: Date.now() - started, accountId: job.accountId };
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return { kind: 'failed', error: 'Flow generation timed out', retryable: true };
+  } catch (error) {
+    // Capture before the final verification check overwrites the last action.
+    // Never include raw Playwright errors, DOM, paths, prompts or authentication data.
+    const action = recorder?.lastAction;
+    const detail = action ? `${action.action} ${action.target}` : 'validate motion job';
+    let failure = error;
+    try { await recorder?.guard(); } catch (detected) { failure = detected; }
+    if (failure instanceof VerificationStop) {
+      setAccountStatus(ctx.db, job.accountId, 'needs_owner', 'Verification required');
+      return { ...failure.result, url: 'Flow page (address omitted)' };
+    }
+    if (ctx.evidenceRunId) {
+      try { saveNote(ctx.evidenceRunId, `Flow motion driver failed at ${detail}; input values omitted.`); } catch { /* Preserve result on evidence failure. */ }
+    }
+    return { kind: 'failed', error: 'Flow driver failed; check configuration and selectors', retryable: false, detail };
   }
 }
 

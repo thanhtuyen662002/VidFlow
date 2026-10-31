@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadSelectors, defaultConfig } from '../../src/flow/selectors.ts';
+import { loadSelectors, defaultConfig, motionSelectorNames } from '../../src/flow/selectors.ts';
 import { runSelftest, playwrightPageAdapter } from '../../src/flow/selftest.ts';
 import { runFlowSelftestCommand } from '../../src/flow/cli.ts';
 import { run } from '../../src/cli.ts';
@@ -83,6 +83,8 @@ test('selftest continues after invalid CSS and adapter delegates counts', async 
     return 2;
   } }) });
   const report = await runSelftest(page, 'mock', { bad: { selector: '[' }, good: { selector: 'video' }, empty: { selector: ' ' } });
-  assert.deepEqual(report.results.map(result => result.status), ['hong', 'dat', 'chua_dien']);
+  assert.deepEqual(report.results.slice(0, 3).map(result => result.status), ['hong', 'dat', 'chua_dien']);
+  assert.deepEqual(report.results.slice(3).map(result => result.name), motionSelectorNames);
+  assert.ok(report.results.slice(3).every(result => result.status === 'chua_dien'));
   assert.equal(report.ok, false);
 });

@@ -5,6 +5,18 @@ import { dataDirectory, resolveInside } from '../paths.ts';
 export type SelectorProfile = 'mock' | 'real';
 export type Selectors = Record<string, { selector: string; note?: string }>;
 export const defaultConfig = new URL('../../config/flow-selectors.json', import.meta.url);
+export const motionRoles = ['character', 'setting', 'style', 'first_frame', 'last_frame'] as const;
+export const motionSelectorNames = ['videoEdit.entry', 'videoEdit.video', 'videoEdit.prompt', 'videoEdit.variants',
+  'videoEdit.submit', 'videoEdit.progress', 'videoEdit.finished', 'videoEdit.download',
+  'frameImage.entry', 'frameImage.kind', 'frameImage.prompt', 'frameImage.submit', 'frameImage.progress',
+  'frameImage.finished', 'frameImage.download',
+  ...['videoEdit', 'frameImage'].flatMap(group => motionRoles.map(role => `${group}.${role}`))];
+/** Owner must calibrate real controls; mock controls belong to the local fixture only. */
+export function motionSelectors(profile: SelectorProfile): Selectors {
+  return Object.fromEntries(motionSelectorNames.map(name => [name, profile === 'mock'
+    ? { selector: `[data-testid="${name}"]` }
+    : { selector: '', note: 'Owner needs to fill in after inspecting Flow edit/image mode' }]));
+}
 // Shared detection rules for the mock and real profiles. Real DOM selectors still need calibration.
 export const flowPatterns = {
   verificationSelector: 'iframe[src*="captcha" i], iframe[title*="captcha" i], iframe[src*="challenge" i]',
@@ -33,5 +45,5 @@ export function loadSelectors(path: string | undefined = undefined, profile: Sel
       }
     }
   }
-  return config[profile] as Selectors;
+  return { ...motionSelectors(profile), ...config[profile] as Selectors };
 }

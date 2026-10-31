@@ -1,4 +1,4 @@
-import { loadSelectors } from './selectors.ts';
+import { loadSelectors, motionSelectorNames } from './selectors.ts';
 import type { SelectorProfile, Selectors } from './selectors.ts';
 
 export interface SelectorPage { countSelector(selector: string): Promise<number> }
@@ -8,7 +8,8 @@ export function playwrightPageAdapter(page: { locator(selector: string): { count
 export type SelectorResult = { name: string; selector: string; status: 'dat' | 'hong' | 'chua_dien'; message: string };
 export async function runSelftest(page: SelectorPage, profile: SelectorProfile, selectors: Selectors = loadSelectors(undefined, profile)) {
   const results: SelectorResult[] = [];
-  for (const [name, entry] of Object.entries(selectors)) {
+  for (const name of new Set([...Object.keys(selectors), ...motionSelectorNames])) {
+    const entry = selectors[name];
     const selector = entry?.selector ?? '';
     if (!selector.trim()) {
       results.push({ name, selector, status: 'chua_dien', message: `Selector ${name} chưa điền (ghi chú: ${entry?.note ?? 'không có'})` });
