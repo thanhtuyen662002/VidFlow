@@ -3,6 +3,7 @@
 import { upgradeReferenceRegistry } from './reference-migration.ts';
 import { upgradeFlowQueue } from './flow/queue-migration.ts';
 import { motionSubjectsMigration } from './motion/017-subjects-migration.ts';
+import { motionStyleMigration } from './motion/018-style-migration.ts';
 
 export interface Migration { version: number; name: string; sql: string; apply?: (db: DatabaseSync) => void }
 
@@ -264,7 +265,7 @@ CREATE TABLE source_segments (
  CHECK(end_sec>start_sec), CHECK(end_frame>start_frame), UNIQUE(source_video_id,idx)
 );
 CREATE INDEX source_videos_project ON source_videos(project_id);
-` }, motionSubjectsMigration];
+` }, motionSubjectsMigration, motionStyleMigration];
 
 export const latestVersion = migrations.at(-1)!.version;
 

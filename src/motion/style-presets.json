@@ -1,0 +1,12 @@
+{
+  "pricing": { "variants": 2, "creditsPerSecond": 5 },
+  "presets": [{
+    "key": "cartoon_faceless", "name": "hoạt hình không lộ mặt", "version": 1,
+    "faceless": true, "style": "Cartoon animation. Show only hands, tools and food.",
+    "fragments": ["Keep a consistent animated appearance."],
+    "forbidden": ["Visible human faces"],
+    "required": ["No face visible."],
+    "disclosure": "This content is AI-generated.",
+    "maxReferenceImages": 3
+  }]
+}

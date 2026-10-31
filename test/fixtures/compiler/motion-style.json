@@ -1,0 +1,12 @@
+[
+  {
+    "segmentId": "s0",
+    "prompt": "Bible\nCartoon animation. Show only hands, tools and food.\nKeep a consistent animated appearance.\ncook: Animated cook; Show a face; Stir; Center\nPreserve motion, rhythm, composition, camera angle and duration (2s).\nStir\nSteady\nOverhead\nNo face visible.\nNo face visible. No visible human faces.\nAvoid: Visible human faces\nThis content is AI-generated.\nThis content is AI-generated.\nSafe\nNo text",
+    "references": [{ "id": "lan", "name": "Lan", "kind": "character", "image": "refs/a.png", "priority": 1 }]
+  },
+  {
+    "segmentId": "s1",
+    "prompt": "Bible\nCartoon animation. Show only hands, tools and food.\nKeep a consistent animated appearance.\ncook: Animated cook; Show a face; Stir; Center\nPreserve motion, rhythm, composition, camera angle and duration (2s).\nStir\nSteady\nOverhead\nNo face visible.\nNo face visible. No visible human faces.\nAvoid: Visible human faces\nThis content is AI-generated.\nThis content is AI-generated.\nSafe\nNo text",
+    "references": [{ "id": "lan", "name": "Lan", "kind": "character", "image": "refs/a.png", "priority": 1 }]
+  }
+]
