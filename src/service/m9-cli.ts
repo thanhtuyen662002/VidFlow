@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { openDatabase } from '../db.ts';
 import { createCoreService } from './index.ts';
-import { createUpdater } from '../app/updater.ts';
+import { createUpdater, DEFAULT_UPDATE_SOURCE } from '../app/updater.ts';
 import { withUpdates } from '../app/update-service.ts';
 import { dataDirectory, resolveInside } from '../paths.ts';
 
@@ -35,7 +35,7 @@ export async function runM9Command(argv: string[], io: IO): Promise<number> {
     if (values['allow-non-empty'] && command !== 'archive.restore') throw new Error('--allow-non-empty chỉ dùng cho khôi phục');
     db = openDatabase();
     const core = createCoreService({ db, llm: { async complete() { throw new Error('Không dùng LLM trong lệnh M9'); } }, flowDriver: { async run() { throw new Error('Không render trong lệnh M9'); } } });
-    const updater = createUpdater({ config: () => ({ channel: 'dev', sourceUrl: core.mcpSettingsStore.getSettings().updates?.sourceUrl ?? '' }), currentVersion: (JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }).version, directory: resolveInside(dataDirectory(), 'updates') });
+    const updater = createUpdater({ config: () => ({ channel: 'dev', sourceUrl: core.mcpSettingsStore.getSettings().updates?.sourceUrl || DEFAULT_UPDATE_SOURCE }), currentVersion: (JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }).version, directory: resolveInside(dataDirectory(), 'updates') });
     const service = withUpdates(core, updater);
     async function execute(name: string, input: Record<string, unknown>) {
       const result = await service.execute(name, input);

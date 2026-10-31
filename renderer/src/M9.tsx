@@ -50,6 +50,6 @@ export function M9Panels({ api, projectId, onProject }: { api: M9Api; projectId:
     <button data-testid="cleanup-preview" disabled={!projectId} onClick={() => perform(async () => setPlan(await call('takes.prunePreview', { projectId }) as typeof plan))}>Xem trước</button>
     {plan && <div data-testid="cleanup-dialog" role="dialog" aria-modal="true" aria-label="Xác nhận dọn take"><p>Các take sẽ bị xóa ({plan.totalSize} byte):</p><ul>{plan.takes.map(t => <li key={t.takeId}>{t.takeId}: {t.path}</li>)}</ul>
       <button data-testid="cleanup-cancel" onClick={() => setPlan(null)}>Hủy</button><button data-testid="cleanup-confirm" className="danger" onClick={() => perform(async () => { setResult(JSON.stringify(await call('takes.pruneApply', { projectId, planId: plan.planId, confirm: true }))); setPlan(null); })}>Xác nhận xóa</button></div>}
-    </div><div className="card"><h2>Kiểm tra cập nhật</h2><button data-testid="update-check" onClick={() => perform(async () => setResult(JSON.stringify(await call('update.check', {}))))}>Kiểm tra cập nhật</button></div></div>
+    </div></div>
   </fieldset></section>;
 }

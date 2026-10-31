@@ -36,17 +36,29 @@ function safeUrl(value: string) {
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw fail('INVALID_UPDATE_URL');
   return url;
 }
-/** No redirects: the configured manifest must point directly to its artifact. */
-export function fetchUpdate(url: string): Promise<Readable> {
+/** Published releases: GitHub serves release files by redirecting to its own download host. */
+export const DEFAULT_UPDATE_SOURCE = 'https://github.com/thanhtuyen662002/VidFlow/releases/latest/download/vidflow-update.json';
+export const githubRedirect = (url: URL) => url.protocol === 'https:'
+  && (url.hostname === 'github.com' || url.hostname.endsWith('.githubusercontent.com'));
+/** Follows at most 5 redirects, and only to targets `trusted` accepts. The SHA-256 check still decides integrity. */
+export function fetchUpdate(url: string, trusted: (url: URL) => boolean = githubRedirect, redirects = 5): Promise<Readable> {
   const target = safeUrl(url);
   return new Promise((resolve, reject) => {
-    const request = (target.protocol === 'https:' ? httpsGet : httpGet)(target, response => {
+    const request = (target.protocol === 'https:' ? httpsGet : httpGet)(target, { headers: { 'User-Agent': 'VidFlow-Updater' } }, response => {
+      const location = response.headers.location;
+      if ([301, 302, 303, 307, 308].includes(response.statusCode ?? 0) && location) {
+        response.resume();
+        const next = new URL(location, target);
+        if (redirects <= 0) { reject(fail('TOO_MANY_REDIRECTS')); return; }
+        if (!trusted(next)) { reject(fail('UNTRUSTED_REDIRECT')); return; }
+        fetchUpdate(next.href, trusted, redirects - 1).then(resolve, reject); return;
+      }
       if (response.statusCode !== 200) { response.resume(); reject(fail('HTTP_ERROR')); return; }
       resolve(response);
     });
-    const timer = setTimeout(() => request.destroy(fail('UPDATE_TIMEOUT')), 120000);
+    // An idle limit, not a total one: the installer is hundreds of MB and may take minutes on a slow line.
+    request.setTimeout(120000, () => request.destroy(fail('UPDATE_TIMEOUT')));
     request.on('error', reject);
-    request.on('close', () => clearTimeout(timer));
   });
 }
 export function createUpdater(options: {
@@ -57,7 +69,7 @@ export function createUpdater(options: {
 }) {
   const fetcher = options.fetcher ?? fetchUpdate;
   let manifest: Readonly<Manifest> | undefined, file: string | undefined;
-  let state = 'idle', busy = false;
+  let state = 'idle', busy = false, received = 0;
   async function exclusive<T>(operation: () => Promise<T>): Promise<T> {
     if (busy) throw fail('UPDATE_BUSY');
     busy = true;
@@ -70,7 +82,7 @@ export function createUpdater(options: {
     if (m.size !== undefined && size !== m.size) throw fail('SIZE_MISMATCH');
   }
   return {
-    status: () => ({ state, manifest, file }),
+    status: thisStatus,
     check: () => exclusive(async () => {
       const config = options.config();
       if (config.channel !== 'dev' || !config.sourceUrl) throw fail('UPDATE_NOT_CONFIGURED');
@@ -86,6 +98,8 @@ export function createUpdater(options: {
         || (m.size !== undefined && (!Number.isSafeInteger(m.size) || m.size < 0)) || (m.releaseNotes !== undefined && typeof m.releaseNotes !== 'string')) throw fail('INVALID_MANIFEST');
       const url = safeUrl(new URL(m.url ?? m.file, config.sourceUrl).href).href;
       if (compareVersions(m.version, options.currentVersion) <= 0) return null;
+      // Rechecking the same release keeps an installer that is already downloaded and verified.
+      if (file && manifest?.version === m.version && manifest.sha256.toLowerCase() === m.sha256.toLowerCase()) return manifest;
       manifest = Object.freeze({ version: m.version, url, sha256: m.sha256, size: m.size, releaseNotes: m.releaseNotes });
       file = undefined; state = 'available'; return manifest;
     }),
@@ -95,11 +109,11 @@ export function createUpdater(options: {
       await mkdir(options.directory, { recursive: true });
       const destination = resolveInside(options.directory, `update-${randomUUID()}.exe`);
       const temporary = `${destination}.part`;
-      file = undefined; state = 'downloading';
+      file = undefined; state = 'downloading'; received = 0;
       try {
         const hash = createHash('sha256'); let size = 0;
         const meter = new Transform({ transform(chunk, _encoding, callback) {
-          size += chunk.length;
+          size += chunk.length; received = size;
           if (size > (m.size ?? 4 * 1024 ** 3)) { callback(fail('SIZE_MISMATCH')); return; }
           hash.update(chunk); callback(null, chunk);
         } });
@@ -121,5 +135,5 @@ export function createUpdater(options: {
       await options.install(file); state = 'installing'; return thisStatus();
     }),
   };
-  function thisStatus() { return { state, manifest, file }; }
+  function thisStatus() { return { state, manifest, file, received }; }
 }

@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, rm, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createUpdater, compareVersions } from '../src/app/updater.ts';
+import { createUpdater, compareVersions, fetchUpdate, githubRedirect } from '../src/app/updater.ts';
 import { withUpdates } from '../src/app/update-service.ts';
 import { createMcpTools } from '../src/app/mcp/tools.ts';
 import { createIpcHandlers } from '../src/app/ipc.ts';
@@ -36,6 +36,9 @@ test('dev updater: loopback manifest, download, integrity and owner gate', async
     const result = await updater.download();
     assert.equal(result.state, 'downloaded');
     assert.deepEqual(await readFile(result.file!), binary);
+    assert.equal(updater.status().received, binary.length);
+    assert.equal((await updater.check())?.version, manifest.version);
+    assert.equal(updater.status().file, result.file, 'rechecking the same release keeps the verified installer');
     await updater.install(); assert.deepEqual(spawned, []);
     assert.equal(updater.status().state, 'downloaded');
   });
@@ -89,4 +92,28 @@ test('semver numeric prereleases, release precedence and invalid versions', () =
   assert.equal(compareVersions('1.2.0+build', '1.2.0'), 0);
   assert.equal(compareVersions('1.2.0-1', '1.2.0-dev'), -1);
   assert.throws(() => compareVersions('1.2.0-dev.01', '1.2.0'));
+});
+
+test('redirects are followed only to trusted hosts', async t => {
+  const server = createServer((req, res) => {
+    const hop = (location: string) => { res.writeHead(302, { Location: location }); res.end(); };
+    if (req.url === '/latest') hop('/asset');
+    else if (req.url === '/asset') res.end('installer');
+    else if (req.url === '/away') hop('http://example.invalid/installer');
+    else if (req.url === '/loop') hop('/loop');
+    else { res.writeHead(404); res.end(); }
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise<void>(resolve => server.close(() => resolve())));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const loopback = (url: URL) => url.hostname === '127.0.0.1';
+  let body = ''; for await (const chunk of await fetchUpdate(`${base}/latest`, loopback)) body += chunk;
+  assert.equal(body, 'installer');
+  await assert.rejects(fetchUpdate(`${base}/latest`), { code: 'UNTRUSTED_REDIRECT' });
+  await assert.rejects(fetchUpdate(`${base}/away`, loopback), { code: 'UNTRUSTED_REDIRECT' });
+  await assert.rejects(fetchUpdate(`${base}/loop`, loopback), { code: 'TOO_MANY_REDIRECTS' });
+  assert.equal(githubRedirect(new URL('https://release-assets.githubusercontent.com/x')), true);
+  assert.equal(githubRedirect(new URL('https://github.com/thanhtuyen662002/VidFlow/releases')), true);
+  assert.equal(githubRedirect(new URL('http://github.com/x')), false);
+  assert.equal(githubRedirect(new URL('https://github.com.example.net/x')), false);
 });

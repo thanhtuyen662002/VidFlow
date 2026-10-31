@@ -24,7 +24,7 @@ export function createMcpSettingsStore(db: DatabaseSync): McpSettingsStore {
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   };
 }
-/** Owner-managed source; no bundled production endpoint. Preserve private MCP settings. */
+/** Overrides the GitHub Releases source (empty restores it). Preserve private MCP settings. */
 export async function configureUpdates(store: McpSettingsStore, sourceUrl: string) {
   if (sourceUrl) {
     const url = new URL(sourceUrl);

@@ -7,7 +7,7 @@ import { createMcpLifecycle } from './mcp/lifecycle.ts';
 import type { McpSettingsStore } from './mcp/settings.ts';
 import { createMcpSettingsStore } from './mcp/settings.ts';
 import { openDatabase } from '../db.ts';
-import { createUpdater } from './updater.ts';
+import { createUpdater, DEFAULT_UPDATE_SOURCE } from './updater.ts';
 import { withUpdates } from './update-service.ts';
 import { dataDirectory, resolveInside } from '../paths.ts';
 import { spawn } from 'node:child_process';
@@ -48,7 +48,7 @@ export async function startElectron(services?: Services & ProgressSource & { mcp
   let commands: Services = services;
   if (app.isPackaged || process.env.VIDFLOW_ENABLE_UPDATES === '1') {
     const updater = createUpdater({
-      config: () => ({ channel: store.getSettings().updates?.channel ?? 'dev', sourceUrl: store.getSettings().updates?.sourceUrl ?? '' }),
+      config: () => ({ channel: store.getSettings().updates?.channel ?? 'dev', sourceUrl: store.getSettings().updates?.sourceUrl || DEFAULT_UPDATE_SOURCE }),
       currentVersion: app.getVersion(), directory: resolveInside(dataDirectory(), 'updates'),
       confirm: async manifest => (await dialog.showMessageBox({ type: 'question',
         title: 'Cập nhật VidFlow', message: `Cài phiên bản ${manifest.version}?`, detail: manifest.releaseNotes ?? '',
@@ -63,8 +63,8 @@ export async function startElectron(services?: Services & ProgressSource & { mcp
         app.quit();
       },
     });
+    // The renderer checks on start and offers the update; see renderer/src/Update.tsx.
     commands = withUpdates(services, updater);
-    if (store.getSettings().updates?.sourceUrl) void updater.check().catch(() => {});
   }
   const mcp = createMcpLifecycle(commands, store);
   try { await mcp.start(); } catch (error) { await mcp.stop(); settingsDb?.close(); throw error; }

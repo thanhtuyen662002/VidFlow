@@ -1,4 +1,4 @@
-﻿import { after, afterEach, before, test } from 'node:test';
+﻿import { after, afterEach, before, mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -178,6 +178,39 @@ test('thiếu preload báo tiếng Việt', async () => { await mount(); assert.
 test('hiển thị nguyên thông báo lỗi lõi', async () => { const api = mockApi(); api.projects.list.mock.mockImplementation(async () => { throw new Error('Lỗi do lõi trả về'); }); await mount(api); assert.match(document.querySelector('[role=alert]')!.textContent!, /Lỗi do lõi trả về/); });
 
 
+test('update box offers a newer release, shows download progress and hands installing to main', async () => {
+  const api = mockApi() as ReturnType<typeof mockApi> & { update: Record<string, ReturnType<typeof mock.fn>> };
+  let finishDownload!: () => void;
+  api.update = {
+    check: mock.fn(async () => ({ ok: true, data: { version: '0.2.0', size: 200 } })),
+    status: mock.fn(async () => ({ ok: true, data: { state: 'downloading', received: 100 } })),
+    download: mock.fn(() => new Promise(resolve => { finishDownload = () => resolve({ ok: true, data: { state: 'downloaded' } }); })),
+    install: mock.fn(async () => ({ ok: true, data: { state: 'downloaded' } })),
+  };
+  await mount(api);
+  assert.match((await waitFor(() => document.querySelector('.update-box.has-update')))!.textContent!, /Có bản mới 0\.2\.0/);
+  await click('Cập nhật ngay');
+  await waitFor(() => document.querySelector('.update-box [role=status]')?.textContent?.includes('50%'), 3000);
+  await act(async () => finishDownload());
+  await waitFor(() => api.update.install.mock.callCount() === 1);
+  // "Để sau" in main's dialog keeps the verified installer: the next click installs without downloading again.
+  await click('Cài đặt');
+  assert.equal(api.update.download.mock.callCount(), 1);
+  assert.equal(api.update.install.mock.callCount(), 2);
+});
+test('update box stays quiet when the start-up check fails and reports a check the user asked for', async () => {
+  const api = mockApi() as ReturnType<typeof mockApi> & { update: Record<string, ReturnType<typeof mock.fn>> };
+  const check = mock.fn(async () => ({ ok: false, error: { message: 'Không thể cập nhật: HTTP_ERROR' } }));
+  api.update = { check, status: mock.fn(), download: mock.fn(), install: mock.fn() };
+  await mount(api);
+  await button('Kiểm tra cập nhật');
+  assert.equal(document.querySelector('.update-box [role=alert]'), null);
+  await click('Kiểm tra cập nhật');
+  assert.match((await waitFor(() => document.querySelector('.update-box [role=alert]')))!.textContent!, /Không kết nối được máy chủ cập nhật/);
+  check.mock.mockImplementation(async () => ({ ok: true, data: null }));
+  await click('Kiểm tra cập nhật');
+  await waitFor(() => document.querySelector('.update-box')?.textContent?.includes('Bạn đang dùng bản mới nhất.'));
+});
 test('whitespace skip reasons are not submitted', async () => {
   const api = mockApi();
   await mount(api);

@@ -21,7 +21,7 @@ p { margin: 6px 0; }
 
 /* Shell */
 .app-shell { display: grid; grid-template-columns: 272px minmax(0, 1fr); height: 100vh; }
-.sidebar { background: var(--sidebar); color: var(--sidebar-text); padding: 0 14px 24px; overflow-y: auto; }
+.sidebar { display: flex; flex-direction: column; background: var(--sidebar); color: var(--sidebar-text); padding: 0 14px 24px; overflow-y: auto; }
 .brand { -webkit-app-region: drag; display: flex; align-items: center; gap: 10px; margin: 0; padding: 20px 6px 18px; font-size: 17px; font-weight: 700; color: #fff; letter-spacing: .01em; }
 .brand-mark { flex: none; }
 .sidebar h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--sidebar-muted); margin: 8px 6px 10px; }
@@ -37,6 +37,16 @@ p { margin: 6px 0; }
 .project-list button:hover:not(:disabled) { background: var(--sidebar-2); border-color: transparent; }
 .project-list button[aria-pressed=true] { background: rgba(124, 58, 237, .24); color: #fff; }
 .project-list button[aria-pressed=true]::before { background: var(--brand); }
+.update-box { margin-top: auto; padding: 14px 6px 0; border-top: 1px solid var(--sidebar-border); font-size: 13px; color: var(--sidebar-muted); }
+.update-box p { margin: 0 0 10px; }
+.update-box [role=alert] { padding: 8px 10px; border-color: rgba(253, 162, 155, .35); background: rgba(240, 68, 56, .12); color: #fda29b; }
+.update-box [role=status] { color: var(--sidebar-text); }
+.update-box button:not(.primary) { width: 100%; margin: 0; background: transparent; border-color: var(--sidebar-border); color: var(--sidebar-text); }
+.update-box button:not(.primary):hover:not(:disabled) { background: var(--sidebar-2); border-color: var(--sidebar-border); }
+.update-box.has-update { margin-left: -6px; margin-right: -6px; padding: 14px; border: 1px solid rgba(124, 58, 237, .5); border-radius: 12px; background: rgba(124, 58, 237, .16); }
+.update-box .update-title { color: #fff; font-weight: 600; font-size: 14px; }
+.update-box button.primary { width: 100%; margin: 0; }
+.update-box progress { width: 100%; height: 6px; accent-color: #a78bfa; }
 
 .workspace { overflow-y: auto; min-width: 0; }
 /* The header doubles as the window title bar: drag to move, and keep clear of the system window buttons. */

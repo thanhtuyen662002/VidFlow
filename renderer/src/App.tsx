@@ -5,6 +5,8 @@ import { Workflow } from './Workflow.tsx';
 import { MotionControl } from './MotionControl.tsx';
 import { M9Panels } from './M9.tsx';
 import type { M9Api } from './M9.tsx';
+import { UpdateBox } from './Update.tsx';
+import type { UpdateApi } from './Update.tsx';
 import type { WorkflowApi } from './workflow.ts';
 
 const message = (error: unknown) =>
@@ -78,7 +80,7 @@ function ProjectsView({ api }: { api: VidflowApi }) {
       }}>
         <label>Tên dự án<input data-testid="project-name" required placeholder="Ví dụ: Phim ngắn mùa hè" value={name} onInput={e => setName(e.currentTarget.value)} /></label><button className="primary" disabled={busy}>Tạo dự án</button>
       </form><nav aria-label="Danh sách dự án" className="project-list">{projects.map(p => <button type="button" key={p.id} data-initial={p.name.trim().charAt(0).toUpperCase()} aria-pressed={selected === p.id} onClick={() => { setSelected(p.id); if (view === 'tools' || view === 'home') setView('script'); }}>{p.name}</button>)}</nav>
-    </section></aside>
+    </section>{'update' in api && <UpdateBox api={api as VidflowApi & UpdateApi} />}</aside>
     <main className="workspace"><header className="topbar"><div><p className="eyebrow">{current ? 'Dự án' : 'Xưởng video của bạn'}</p><h1>{current?.name ?? 'VidFlow'}</h1></div>
       <nav className="view-tabs" aria-label="Khu vực làm việc">{views.filter(([, , available]) => available).map(([key, title]) => <button type="button" key={key} aria-pressed={shown === key} onClick={() => setView(key)}>{title}</button>)}</nav></header>
       <div className="workspace-body">{selected ? <ProjectPanels key={selected} api={api} projectId={selected} view={shown} /> : shown === 'home' && <EmptyState />}
