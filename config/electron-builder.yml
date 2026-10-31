@@ -32,7 +32,16 @@ win:
   signAndEditExecutable: false
 forceCodeSigning: false
 nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
+  # One click installs everything for the current user (no admin prompt) and starts VidFlow.
+  oneClick: true
   perMachine: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  runAfterFinish: true
 publish: null
+# Built by config/vendor-tools.mjs; resolved at runtime by src/app/bundled-tools.ts.
+extraResources:
+  - from: vendor/ffmpeg
+    to: ffmpeg
+  - from: vendor/ms-playwright
+    to: ms-playwright

@@ -12,6 +12,9 @@ export default defineConfig({
   // Do not inherit the renderer root or its React plugin.
   root: fileURLToPath(root),
   publicDir: false,
+  // The main process reads its real environment (VIDFLOW_HOME, APPDATA, PATH, tool paths); a client build would
+  // otherwise replace process.env with {}.
+  define: { 'process.env': 'process.env' },
   build: {
     target: 'node24',
     outDir: 'dist-electron',
@@ -25,13 +28,17 @@ export default defineConfig({
   },
   plugins: [{
     name: 'copy-sandbox-preload',
+    // Before Vite's asset handling, which would rewrite these URLs to root-relative /assets/ paths.
+    enforce: 'pre',
     transform(code, id) {
-      // Preserve the two runtime resource URLs after their modules are bundled.
+      // Keep the runtime resource URLs relative to dist-electron/main.mjs; closeBundle copies the files there.
       const path = id.replaceAll('\\', '/');
+      if (path.endsWith('/src/app/main.ts'))
+        return code.replace("new URL('./preload.cjs'", "new URL(/* @vite-ignore */ './preload.cjs'");
       if (path.endsWith('/src/flow/selectors.ts'))
-        return code.replace("'../../config/flow-selectors.json'", "'./assets/flow-selectors.json'");
+        return code.replace("new URL('../../config/flow-selectors.json'", "new URL(/* @vite-ignore */ './assets/flow-selectors.json'");
       if (path.endsWith('/src/script/prompts.ts'))
-        return code.replace("'../../prompts/'", "'./assets/prompts/'");
+        return code.replace("new URL('../../prompts/'", "new URL(/* @vite-ignore */ './assets/prompts/'");
     },
     closeBundle() {
       copyFileSync(new URL('src/app/preload.cjs', root), new URL('dist-electron/preload.cjs', root));

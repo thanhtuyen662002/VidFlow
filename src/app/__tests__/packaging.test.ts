@@ -21,9 +21,11 @@ test('Windows package is an unsigned x64 NSIS installer with a narrow whitelist'
   }
   assert.doesNotMatch(yaml, /^\s*(certificateFile|certificatePassword|sign|signingHashAlgorithms|azureSignOptions)\s*:/m);
   assert.match(yaml, /signAndEditExecutable: false/);
-  assert.match(yaml, /oneClick: false/);
-  assert.match(yaml, /allowToChangeInstallationDirectory: true/);
+  assert.match(yaml, /oneClick: true/);
   assert.match(yaml, /perMachine: false/);
+  assert.match(yaml, /runAfterFinish: true/);
+  // ffmpeg and the Playwright browsers ship beside the app, outside the asar whitelist.
+  assert.match(yaml, /extraResources:\s+- from: vendor\/ffmpeg\s+to: ffmpeg\s+- from: vendor\/ms-playwright\s+to: ms-playwright/);
 });
 
 test('main bundle, preload and manifest paths agree', () => {
@@ -41,5 +43,5 @@ test('main bundle, preload and manifest paths agree', () => {
   assert.match(read('vite.config.ts'), /outDir: 'dist'/);
   const manifest = JSON.parse(read('package.json'));
   assert.equal(manifest.main, 'dist-electron/main.mjs');
-  assert.equal(manifest.scripts['package:win'], 'npm run build && electron-builder --win nsis --x64 --config config/electron-builder.yml');
+  assert.equal(manifest.scripts['package:win'], 'npm run build && node config/vendor-tools.mjs && electron-builder --win nsis --x64 --config config/electron-builder.yml');
 });

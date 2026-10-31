@@ -15,11 +15,31 @@ Công cụ làm video AI dài từ kịch bản, gồm các bước:
 - Các mốc (dự án Agent Forge): [`docs/milestones/`](docs/milestones/README.md)
 - Quy ước cho agent lập trình: [`AGENTS.md`](AGENTS.md)
 
-## Yêu cầu
+## Cài đặt cho người dùng
+
+Chạy `VidFlow Setup <phiên bản>.exe` một lần là xong. Bộ cài:
+
+- cài cho tài khoản Windows đang dùng, không hỏi quyền quản trị;
+- tạo biểu tượng trên màn hình và trong menu Start;
+- mở VidFlow ngay sau khi cài.
+
+Bộ cài đã kèm sẵn ffmpeg, ffprobe và trình duyệt Chromium dùng cho Google Flow, nên không cần cài Node, ffmpeg hay trình duyệt riêng.
+
+## Phát triển
+
+Yêu cầu:
 
 - Windows
 - Node 24 trở lên
 - ffmpeg trên PATH (hoặc đặt biến `VIDFLOW_FFMPEG`)
+
+Tạo bộ cài:
+
+```
+npm run package:win
+```
+
+Lệnh này dựng ứng dụng, chép ffmpeg, ffprobe và Chromium vào `vendor/` (xem `config/vendor-tools.mjs`), rồi tạo file cài trong `release/`.
 
 ## Kiểm thử
 
