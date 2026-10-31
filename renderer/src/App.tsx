@@ -2,6 +2,8 @@
 import type { Bible, Gate, Project, Reference, VidflowApi } from './api.ts';
 import { getApi } from './api.ts';
 import { Workflow } from './Workflow.tsx';
+import { M9Panels } from './M9.tsx';
+import type { M9Api } from './M9.tsx';
 import type { WorkflowApi } from './workflow.ts';
 
 const message = (error: unknown) =>
@@ -57,6 +59,7 @@ function ProjectsView({ api }: { api: VidflowApi }) {
         <label>Tên dự án<input data-testid="project-name" required value={name} onInput={e => setName(e.currentTarget.value)} /></label><button disabled={busy}>Tạo dự án</button>
       </form><nav aria-label="Danh sách dự án">{projects.map(p => <button type="button" key={p.id} aria-pressed={selected === p.id} onClick={() => setSelected(p.id)}>{p.name}</button>)}</nav>
     </section>{selected ? <ProjectPanels key={selected} api={api} projectId={selected} /> : <p>Chọn hoặc tạo dự án để bắt đầu.</p>}
+    {('archive' in api || 'm9' in api) && <M9Panels key={selected} api={api as VidflowApi & M9Api} projectId={selected} onProject={p => { setProjects(previous => [...previous, p]); setSelected(p.id); }} />}
   </main>;
 }
 

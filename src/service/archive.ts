@@ -207,3 +207,7 @@ export async function restore(backupFile: string, targetDir: string,
     return manifest;
   } finally { unzip.destroy(); input.destroy(); if (stage) await rm(stage, { recursive: true, force: true }); }
 }
+
+// Descriptive service names; preserve the original API for existing callers.
+export const backupProject = backup;
+export const restoreProject = restore;

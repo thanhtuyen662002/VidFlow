@@ -1,7 +1,8 @@
 ﻿import { test } from 'node:test';
 import { createMcpServer } from '../src/app/mcp/server.ts';
 import assert from 'node:assert/strict';
-import { writeFileSync, readFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createCoreService } from '../src/service/index.ts';
 import { getWeights } from '../src/script/weights.ts';
@@ -10,7 +11,7 @@ import type { TestContext } from 'node:test';
 import { setup as setupCore } from './service-fixture.ts';
 function setup(t: TestContext) {
   const { db, deps, service: core } = setupCore(t);
-  assert.equal(core.listCommands().length, 55);
+  assert.equal(core.listCommands().length, 59);
   const server = createMcpServer({ services: core, getSettings: () => ({ mcp: { enabled: true, port: 0, token: 'MCP_PRIVATE_VALUE' } }) });
   const started = server.start().then(async address => {
     const response = await fetch('http://127.0.0.1:' + address.port + '/mcp', { method: 'POST', headers: { authorization: 'Bearer MCP_PRIVATE_VALUE', 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
@@ -164,6 +165,13 @@ test('MCP HTTP: service-only project to package flow, every command returns safe
   await run('template.get', { id: template.id });
   await run('template.createProject', { templateId: template.id, name: 'Series episode' });
   await run('template.delete', { id: template.id });
+  const cleanup = await run<{ planId: string }>('takes.prunePreview', { projectId: p.id });
+  await run('takes.pruneApply', { projectId: p.id, planId: cleanup.planId, confirm: true });
+  await run('archive.backup', { file: 'workflow.vfb' });
+  const targetDir = mkdtempSync(join(tmpdir(), 'vidflow-mcp-restore-'));
+  t.after(() => rmSync(targetDir, { recursive: true, force: true }));
+  const restored = await run<{ files: { path: string }[] }>('archive.restore', { file: 'workflow.vfb', targetDir });
+  assert.ok(restored.files.some(file => file.path === 'vidflow.db'));
   assert.deepEqual([...called].sort(), service.listCommands().map(c => c.name).sort());
   await run('bible.update', { projectId: p.id, fields: { style: 'Changed lighting' } });
   const stale = await service.execute('render.run', { planId: plan.id, storyboardId: board.id });

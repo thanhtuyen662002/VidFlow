@@ -1,6 +1,7 @@
 ﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import { writeFileSync, readFileSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createCoreService } from '../src/service/index.ts';
 import { sanitize } from '../src/service/sanitize.ts';
@@ -128,6 +129,13 @@ test('service-only project to package flow, every command returns safe data', as
   await run('template.get', { id: template.id });
   await run('template.createProject', { templateId: template.id, name: 'Series episode' });
   await run('template.delete', { id: template.id });
+  const cleanup = await run<{ planId: string }>('takes.prunePreview', { projectId: p.id });
+  await run('takes.pruneApply', { projectId: p.id, planId: cleanup.planId, confirm: true });
+  await run('archive.backup', { file: 'workflow.vfb' });
+  const targetDir = mkdtempSync(join(tmpdir(), 'vidflow-service-restore-'));
+  t.after(() => rmSync(targetDir, { recursive: true, force: true }));
+  const restored = await run<{ files: { path: string }[] }>('archive.restore', { file: 'workflow.vfb', targetDir });
+  assert.ok(restored.files.some(file => file.path === 'vidflow.db'));
   assert.deepEqual([...called].sort(), service.listCommands().map(c => c.name).sort());
   await run('bible.update', { projectId: p.id, fields: { style: 'Changed lighting' } });
   const stale = await service.execute('render.run', { planId: plan.id, storyboardId: board.id });

@@ -2,6 +2,9 @@ import type { createIpcHandlers } from './ipc.ts';
 import type { RenderProgress } from '../service/progress.ts';
 type Result = Awaited<ReturnType<ReturnType<typeof createIpcHandlers>['handleInvoke']>>;
 export interface LegacyApi {
+  archive: { backup(input: { file: string }): Promise<Result>; restore(input: { file: string; targetDir: string; allowNonEmpty?: boolean }): Promise<Result> };
+  takes: { prunePreview(input: { projectId: string }): Promise<Result>; pruneApply(input: { projectId: string; planId?: string; confirm?: boolean }): Promise<Result> };
+  update: { check(input: Record<string, never>): Promise<Result>; download(input: Record<string, never>): Promise<Result>; install(input: Record<string, never>): Promise<Result>; status(input: Record<string, never>): Promise<Result> };
   template: {
     save(input: { projectId: string; name: string }): Promise<Result>;
     createProject(input: { templateId: string; name: string }): Promise<Result>;

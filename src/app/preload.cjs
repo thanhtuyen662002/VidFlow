@@ -12,6 +12,20 @@ async function unwrap(channel, input) {
 }
 /** @satisfies {import('./api.ts').VidflowApi} */
 const api = {
+archive: Object.freeze({
+  backup: input => ipcRenderer.invoke('archive:backup', input),
+  restore: input => ipcRenderer.invoke('archive:restore', input)
+}),
+takes: Object.freeze({
+  prunePreview: input => ipcRenderer.invoke('takes:prunePreview', input),
+  pruneApply: input => ipcRenderer.invoke('takes:pruneApply', input)
+}),
+update: Object.freeze({
+  check: input => ipcRenderer.invoke('update:check', input),
+  download: input => ipcRenderer.invoke('update:download', input),
+  install: input => ipcRenderer.invoke('update:install', input),
+  status: input => ipcRenderer.invoke('update:status', input)
+}),
 template: Object.freeze({
   save: input => ipcRenderer.invoke('template:save', input),
   createProject: input => ipcRenderer.invoke('template:createProject', input),

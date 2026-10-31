@@ -115,7 +115,31 @@ export function deleteTakes(db: DatabaseSync, plan: CleanupPlan, confirmation?: 
 
 /** Minimal trusted local service API; adapters must show the plan before passing confirmation. */
 export function createMaintenanceService(db: DatabaseSync, dataDir = dataDirectory()) {
+  const reviewedProjects = new Map<string, string>();
+  const planTakeCleanup = (projectId: string) => {
+    const plan = listUnselectedTakes(db, projectId, dataDir);
+    // Stable across CLI processes; confirmation still requires an explicit owner action.
+    const { confirmation, ...snapshot } = plan;
+    const planId = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+    if (reviewedProjects.size >= 100) reviewedProjects.delete(reviewedProjects.keys().next().value!);
+    reviewedProjects.set(planId, projectId);
+    return { ...plan, planId };
+  };
+  const executeTakeCleanup = (input: { planId?: string; projectId?: string; confirm?: boolean }) => {
+    if (input.confirm !== true || !input.planId)
+      throw Object.assign(new Error('CONFIRMATION_REQUIRED: Cần xác nhận và planId trước khi xóa take'), { code: 'CONFIRMATION_REQUIRED' });
+    const projectId = input.projectId ?? reviewedProjects.get(input.planId);
+    if (!projectId) throw new Error('CONFIRMATION_REQUIRED: Cần xem trước danh sách take');
+    const current = planTakeCleanup(projectId);
+    if (current.planId !== input.planId) throw new Error('Danh sách dọn take đã thay đổi; cần xem và xác nhận lại');
+    const { planId, ...plan } = current;
+    const result = deleteTakes(db, plan, plan.confirmation, dataDir);
+    reviewedProjects.delete(planId);
+    return result;
+  };
   return {
+    planTakeCleanup,
+    executeTakeCleanup,
     backup: (file: string) => backup(dataDir, resolveInside(dataDir, file)),
     restore: (file: string, targetDir: string, options?: { allowNonEmpty?: boolean }) => restore(resolveInside(dataDir, file), targetDir, options),
     listUnselectedTakes: (projectId: string) => listUnselectedTakes(db, projectId, dataDir),

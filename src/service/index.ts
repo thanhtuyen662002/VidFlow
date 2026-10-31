@@ -1,4 +1,5 @@
 import { getScriptGate, skipScriptGate } from '../script/gate.ts';
+import { createMaintenanceService } from './maintenance.ts';
 import { saveProjectAsTemplate, createProjectFromTemplate, listTemplates, getTemplate, deleteTemplate } from '../repo/templates.ts';
 import { createProgressSource } from './progress.ts';
 import type { DatabaseSync } from 'node:sqlite';
@@ -111,6 +112,21 @@ export function createCoreService(deps: ServiceDependencies) {
     return value;
   }
   const project = (id: string) => need(getProject(db, id));
+  const maintenance = createMaintenanceService(db);
+  register<{ file: string }>('archive.backup', object({ file: text }), output({}), i => maintenance.backup(i.file));
+  register<{ file: string; targetDir: string; allowNonEmpty?: boolean }>('archive.restore', object({ file: text, targetDir: text, allowNonEmpty: { type: 'boolean' } }, ['file', 'targetDir']), output({}), async i => {
+    try { return await maintenance.restore(i.file, i.targetDir, { allowNonEmpty: i.allowNonEmpty }); }
+    catch (error) { throw new ServiceError('PRECONDITION_FAILED', `Không thể khôi phục. Thư mục đích đã có dữ liệu hoặc bản sao lưu không hợp lệ; hãy chọn thư mục khác và kiểm tra bản sao lưu. ${error instanceof Error ? error.message : ''}`); }
+  });
+  register<{ projectId: string }>('takes.prunePreview', projectInput, output({}), i => {
+    project(i.projectId);
+    return maintenance.planTakeCleanup(i.projectId);
+  });
+  register<{ projectId: string; planId?: string; confirm?: boolean }>('takes.pruneApply', object({ projectId: text, planId: text, confirm: { type: 'boolean' } }, ['projectId']), output({}), i => {
+    if (i.confirm !== true) return { deleted: 0, requiresConfirmation: true };
+    try { return maintenance.executeTakeCleanup(i); }
+    catch (error) { throw new ServiceError('PRECONDITION_FAILED', error instanceof Error ? error.message : 'Cần xác nhận dọn take'); }
+  });
   register<{ projectId: string; name: string }>('template.save', object({ projectId: text, name: text }), identified, i => saveProjectAsTemplate(db, i.projectId, i));
   register<{ templateId: string; name: string }>('template.createProject', object({ templateId: text, name: text }), projectSchema, i => createProjectFromTemplate(db, i.templateId, i));
   register('template.list', object({}), array(identified), () => listTemplates());

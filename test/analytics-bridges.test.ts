@@ -14,7 +14,7 @@ test('sandbox preload, IPC and MCP expose all registry commands including analyt
   assert.ok(expected.includes('template.save'));
   const source = readFileSync(new URL('../src/app/preload.cjs', import.meta.url), 'utf8');
   const channels = [...new Set([...source.matchAll(/(?:invoke|unwrap)\('([\w]+:[\w]+)'/g)].map(m => m[1]))];
-  assert.deepEqual(channels.map(c => c.replace(':', '.')).sort(), expected);
+  assert.deepEqual(channels.map(c => c.replace(':', '.')).sort(), [...expected, 'update.check', 'update.download', 'update.install', 'update.status'].sort());
   assert.deepEqual(createIpcHandlers(service).channels.map(c => c.replace(':', '.')).sort(), expected);
   const tools = createMcpTools(service);
   assert.deepEqual(tools.list().map(c => c.name.replace('_', '.')).sort(), expected);
