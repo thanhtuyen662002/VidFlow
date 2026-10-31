@@ -24,6 +24,8 @@ import { createAccount, getAccount, listAccounts, setAccountStatus } from '../fl
 import { addEntry, getBalance, listEntries } from '../flow/credits.ts';
 import { listJobs } from '../flow/queue.ts';
 import { buildTimelineFromSelectedTakes, getTimeline } from '../edit/timeline.ts';
+import { importAnalyticsCsv, listProposals, acceptProposal, rejectProposal, ProposalConflictError } from '../script/analytics.ts';
+import { CsvImportError } from '../script/analytics-csv.ts';
 import { exportFinal } from '../edit/export.ts';
 import { buildPublishPackage, collectMusicLicenses } from '../edit/package.ts';
 import { buildCapcutDraft, writeCapcutDraft } from '../edit/capcut.ts';
@@ -108,6 +110,10 @@ export function createCoreService(deps: ServiceDependencies) {
     return value;
   }
   const project = (id: string) => need(getProject(db, id));
+  register<{ projectId: string; timelineId: string; csvPath: string }>('analytics.import', object({ projectId: text, timelineId: text, csvPath: text }), output({}), i => importAnalyticsCsv(db, i.projectId, i.timelineId, i.csvPath));
+  register<{ projectId: string }>('analytics.list', projectInput, array(output({})), i => { project(i.projectId); return listProposals(db, i.projectId); });
+  register<{ id: string }>('analytics.accept', object({ id: text }), output({}), i => acceptProposal(db, i.id));
+  register<{ id: string }>('analytics.reject', object({ id: text }), output({}), i => rejectProposal(db, i.id));
   const safeAccount = (a: NonNullable<ReturnType<typeof getAccount>>) => ({ id: a.id, label: a.label, status: a.status, remainingCredits: getBalance(db, String(a.id)) });
   const board = (id: string) => need(getStoryboard(db, id));
   const budgetView = (id: string) => ({ used: projectCommittedCredits(db, project(id).id), limit: project(id).budget });
@@ -244,6 +250,8 @@ export function createCoreService(deps: ServiceDependencies) {
         if (!validateSchema(data, command.outputSchema).valid) return fail('INTERNAL_ERROR', 'Invalid command output');
         return { ok: true, data };
       } catch (error) {
+        if (error instanceof CsvImportError) return fail('VALIDATION_ERROR', error.message, error.issues.map(i => ({ path: `$.csv.line${i.line}`, message: i.message })));
+        if (error instanceof ProposalConflictError) return fail('PRECONDITION_FAILED', error.message);
         if (error instanceof ServiceError) return fail(error.code, error.message, error.code === 'VALIDATION_ERROR' ? [{ path: '$', message: error.message }] : []);
         if (error instanceof InputValidationError || error instanceof UnsafePathError)
           return fail('VALIDATION_ERROR', 'Invalid field or unsafe path', [{ path: '$', message: 'Invalid field or unsafe path' }]);

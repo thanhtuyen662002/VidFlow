@@ -1,7 +1,7 @@
 import type { Services } from '../ipc.ts';
-import { validateSchema } from '../../script/llm/schema.ts';
 
 const descriptions: Record<string, string> = {
+  analytics: 'Import owner-provided CSV retention data, list pending weight proposals, accept or reject them; only accept changes active weights',
   project: 'Quản lý dự án', reference: 'Quản lý tham chiếu', bible: 'Cập nhật Bible',
   script: 'Soạn và duyệt kịch bản', storyboard: 'Tạo và duyệt storyboard', render: 'Điều phối render',
   take: 'Xem và chọn take', edit: 'Dựng và xuất video', audio: 'Dựng âm thanh',
@@ -16,7 +16,7 @@ export function createMcpTools(services: Services) {
       inputSchema: command.inputSchema })),
     async call(name: string, args: unknown) {
       const command = commands.get(name);
-      if (!command || !validateSchema(args, command.inputSchema).valid) return undefined;
+      if (!command || !args || typeof args !== 'object' || Array.isArray(args)) return undefined;
       try {
         const result = await services.execute(command.name, args);
         return { isError: !result.ok, content: [{ type: 'text', text: JSON.stringify(result.ok ? result.data : result.error) }] };

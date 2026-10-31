@@ -2,6 +2,12 @@ import type { createIpcHandlers } from './ipc.ts';
 import type { RenderProgress } from '../service/progress.ts';
 type Result = Awaited<ReturnType<ReturnType<typeof createIpcHandlers>['handleInvoke']>>;
 export interface LegacyApi {
+  analytics: {
+    import(input: { projectId: string; timelineId: string; csvPath: string }): Promise<Result>;
+    list(input: { projectId: string }): Promise<Result>;
+    accept(input: { id: string }): Promise<Result>;
+    reject(input: { id: string }): Promise<Result>;
+  };
   budget: import('../../renderer/src/workflow.ts').WorkflowControls['budget'];
   settings: import('../../renderer/src/workflow.ts').WorkflowControls['settings'];
   project: { create(input: Record<string, unknown>): Promise<Result>; list(input: Record<string, unknown>): Promise<Result>; get(input: Record<string, unknown>): Promise<Result> };

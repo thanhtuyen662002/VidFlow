@@ -12,6 +12,12 @@ async function unwrap(channel, input) {
 }
 /** @satisfies {import('./api.ts').VidflowApi} */
 const api = {
+analytics: Object.freeze({
+  accept: input => ipcRenderer.invoke('analytics:accept', input),
+  import: input => ipcRenderer.invoke('analytics:import', input),
+  list: input => ipcRenderer.invoke('analytics:list', input),
+  reject: input => ipcRenderer.invoke('analytics:reject', input)
+}),
 project: Object.freeze({
   create: input => ipcRenderer.invoke('project:create', input),
   list: input => ipcRenderer.invoke('project:list', input),

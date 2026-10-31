@@ -88,6 +88,14 @@ test('service-only project to package flow, every command returns safe data', as
   for (const step of plan.steps) await run('take.select', { stepId: step.id, takeId: takes.find(take => take.sceneId === step.sceneId)!.id, inPoint: 0.5, outPoint: 2.5 });
   const timeline = await run<{ id: string; tracks: { kind: string; clips: unknown[] }[] }>('edit.assemble', { projectId: p.id });
   assert.equal(timeline.tracks.find(track => track.kind === 'video')!.clips.length, 2);
+  const csvPath = join(p.directory, 'retention.csv');
+  writeFileSync(csvPath, 'timestamp,retention\n0,100\n2,50\n4,49\n');
+  const analyticsInput = { projectId: p.id, timelineId: timeline.id, csvPath };
+  const imported = await run<{ proposal: { id: string } }>('analytics.import', analyticsInput);
+  await run('analytics.list', { projectId: p.id });
+  await run('analytics.accept', { id: imported.proposal.id });
+  const rejected = await run<{ proposal: { id: string } }>('analytics.import', analyticsInput);
+  await run('analytics.reject', { id: rejected.proposal.id });
   await run('edit.capcut', { timelineId: timeline.id, aspect: '16:9' });
   const audio = await run<{ path: string }>('audio.mix', { projectId: p.id, durationSec: 4, output: join(p.directory, 'exports', 'mixed.wav') });
   const video = await run<{ path: string }>('edit.export', { timelineId: timeline.id, aspect: '16:9', mixedAudioPath: audio.path });

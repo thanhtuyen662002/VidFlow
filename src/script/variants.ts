@@ -11,6 +11,7 @@ import { createScriptReview } from '../repo/script-reviews.ts';
 import { transaction } from '../repo/records.ts';
 import { loadSystemPrompt } from './prompts.ts';
 import { checkDialogueLength } from './dialogue.ts';
+import { getWeights } from './weights.ts';
 export { revise, reviewRisks, overrideWarning, approve, acceptRevision, ScriptGateError } from './gate.ts';
 export type { RiskWarning } from './gate.ts';
 
@@ -106,7 +107,7 @@ export async function evaluateVariant(options: Dependencies & { wordsPerSecond?:
     const system = await loadSystemPrompt('script-editor', options);
     const { value } = await generateValidated<{ score: number; comment: string; issues: ScriptIssue[] }>({
       llm: options.llm, maxAttempts: options.maxAttempts, system,
-      prompt: JSON.stringify({ variant, schema: reviewSchema }), schema: reviewSchema,
+      prompt: JSON.stringify({ variant, weights: getWeights(options.db, variant.projectId), schema: reviewSchema }), schema: reviewSchema,
     });
     const scenes = variant.scenes as ScriptScene[];
     if (value.issues.some(issue => !scenes.some(scene => scene.sceneIndex === issue.sceneIndex)))

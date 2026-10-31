@@ -4,11 +4,13 @@ import assert from 'node:assert/strict';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createCoreService } from '../src/service/index.ts';
+import { getWeights } from '../src/script/weights.ts';
 import type { TestContext } from 'node:test';
 
 import { setup as setupCore } from './service-fixture.ts';
 function setup(t: TestContext) {
   const { db, deps, service: core } = setupCore(t);
+  assert.equal(core.listCommands().length, 50);
   const server = createMcpServer({ services: core, getSettings: () => ({ mcp: { enabled: true, port: 0, token: 'MCP_PRIVATE_VALUE' } }) });
   const started = server.start().then(async address => {
     const response = await fetch('http://127.0.0.1:' + address.port + '/mcp', { method: 'POST', headers: { authorization: 'Bearer MCP_PRIVATE_VALUE', 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
@@ -111,6 +113,23 @@ test('MCP HTTP: service-only project to package flow, every command returns safe
   for (const step of plan.steps) await run('take.select', { stepId: step.id, takeId: takes.find(take => take.sceneId === step.sceneId)!.id, inPoint: 0.5, outPoint: 2.5 });
   const timeline = await run<{ id: string; tracks: { kind: string; clips: unknown[] }[] }>('edit.assemble', { projectId: p.id });
   assert.equal(timeline.tracks.find(track => track.kind === 'video')!.clips.length, 2);
+  const csvPath = join(p.directory, 'retention.csv');
+  writeFileSync(csvPath, 'timestamp,retention\n0,100\n2,50\n4,49\n');
+  const analyticsInput = { projectId: p.id, timelineId: timeline.id, csvPath };
+  const originalWeights = getWeights(db, p.id);
+  const imported = await run<{ proposal: { id: string; status: string }; report: { flagged: boolean }[] }>('analytics.import', analyticsInput);
+  assert.equal(imported.proposal.status, 'pending');
+  assert.ok(imported.report.some(beat => beat.flagged));
+  assert.deepEqual(getWeights(db, p.id), originalWeights);
+  await run('analytics.list', { projectId: p.id });
+  const accepted = await run<{ status: string }>('analytics.accept', { id: imported.proposal.id });
+  assert.equal(accepted.status, 'accepted');
+  const acceptedWeights = getWeights(db, p.id);
+  assert.notDeepEqual(acceptedWeights, originalWeights);
+  const pendingRejection = await run<{ proposal: { id: string } }>('analytics.import', analyticsInput);
+  const rejected = await run<{ status: string }>('analytics.reject', { id: pendingRejection.proposal.id });
+  assert.equal(rejected.status, 'rejected');
+  assert.deepEqual(getWeights(db, p.id), acceptedWeights);
   await run('edit.capcut', { timelineId: timeline.id, aspect: '16:9' });
   const audio = await run<{ path: string }>('audio.mix', { projectId: p.id, durationSec: 4, output: join(p.directory, 'exports', 'mixed.wav') });
   const video = await run<{ path: string }>('edit.export', { timelineId: timeline.id, aspect: '16:9', mixedAudioPath: audio.path });
