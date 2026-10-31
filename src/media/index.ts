@@ -7,3 +7,4 @@ export * from './probe.ts';
 export * from './extract-frame.ts';
 export * from './crop-logo.ts';
 export * from './concat-segments.ts';
+export * from './scene-detection.ts';
