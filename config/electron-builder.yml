@@ -1,0 +1,38 @@
+appId: vn.vidflow.app
+productName: VidFlow
+directories:
+  output: release
+files:
+  - package.json
+  - renderer/dist/**/*
+  - dist-electron/**/*
+  - '!profiles/**'
+  - '!**/profiles/**'
+  - '!test/**'
+  - '!tests/**'
+  - '!**/test/**'
+  - '!**/tests/**'
+  - '!**/*.test.*'
+  - '!**/*.spec.*'
+  - '!data/**'
+  - '!userData/**'
+  - '!**/data/**'
+  - '!**/userData/**'
+  - '!**/*.sqlite*'
+  - '!**/*.db'
+  - '!.env*'
+  - '!**/.env*'
+  - '!docs/**'
+  - '!src/**'
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  signAndEditExecutable: false
+forceCodeSigning: false
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+publish: null

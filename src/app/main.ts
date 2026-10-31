@@ -14,8 +14,22 @@ export function getSecureWebPreferences() {
 }
 
 /** Called by the application composition root with the same service instance as MCP. */
-export async function startElectron(services: Services & ProgressSource & { mcpSettingsStore?: McpSettingsStore; useMcpSettingsStore?: (store: McpSettingsStore) => void }, rendererUrl: string, settings?: McpSettingsStore) {
+export async function startElectron(services?: Services & ProgressSource & { mcpSettingsStore?: McpSettingsStore; useMcpSettingsStore?: (store: McpSettingsStore) => void }, rendererUrl = new URL('../renderer/dist/index.html', import.meta.url).href, settings?: McpSettingsStore) {
   const { app, BrowserWindow, ipcMain } = await import('electron');
+  if (!services) {
+    process.env.VIDFLOW_HOME ||= app.getPath('userData');
+    const [{ createCoreService }, { configuredLlm }, { createPageDriver }, { launchFlowContext }] = await Promise.all([
+      import('../service/index.ts'), import('../script/config.ts'), import('../flow/pageDriver.ts'), import('../flow/driver.ts'),
+    ]);
+    const db = openDatabase();
+    app.once('will-quit', () => db.close());
+    services = createCoreService({ db,
+      llm: { complete: request => configuredLlm().complete(request) },
+      flowDriver: createPageDriver(async accountId => ({ db, browser: await launchFlowContext(accountId),
+        url: 'https://labs.google/fx/tools/flow', timeoutMs: 30000 })),
+    });
+  }
+  const activeServices = services;
   const target = new URL(rendererUrl);
   if (target.protocol !== 'file:' && !(target.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(target.hostname))) throw new Error('Untrusted renderer URL');
   const trusted = (url: string) => {
@@ -44,7 +58,7 @@ export async function startElectron(services: Services & ProgressSource & { mcpS
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, url) => { if (!trusted(url)) event.preventDefault(); });
     window.webContents.on('will-attach-webview', event => event.preventDefault());
-    const unsubscribe = createProgressForwarder(services, (channel, payload) => {
+    const unsubscribe = createProgressForwarder(activeServices, (channel, payload) => {
       if (!window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send(channel, payload);
     });
     window.once('closed', () => { unsubscribe(); windows.delete(window); });
