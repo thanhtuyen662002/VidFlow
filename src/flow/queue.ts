@@ -15,13 +15,15 @@ export function enqueueJob(db: DatabaseSync, payload: unknown, options: { projec
     .run(id, options.projectId ?? null, json, options.priority ?? 0, 'queued', now, now);
   return getJob(db, id)!;
 }
-export function claimNextJob(db: DatabaseSync, workerId: string, options: { accountId?: string } = {}) {
+export function claimNextJob(db: DatabaseSync, workerId: string, options: { accountId?: string; jobId?: string } = {}) {
   if (!workerId.trim()) throw new Error('Worker is required');
   if (options.accountId !== undefined && !db.prepare('SELECT id FROM flow_accounts WHERE id=?').get(options.accountId)) throw new Error('Account not found');
   const now = new Date().toISOString();
   return db.prepare(`UPDATE render_jobs SET status='running',worker_id=?,account_id=?,claimed_at=?,attempts=attempts+1,updated_at=?
-    WHERE id=(SELECT id FROM render_jobs WHERE status='queued' AND payload IS NOT NULL ORDER BY priority DESC,created_at,id LIMIT 1)
-    AND status='queued' RETURNING *`).get(workerId, options.accountId ?? null, now, now) ?? null;
+    WHERE id=(SELECT id FROM render_jobs WHERE status='queued' AND payload IS NOT NULL
+      AND (? IS NULL OR id=?) AND COALESCE(json_extract(payload,'$.internalMotionStep'),0)=0
+      ORDER BY priority DESC,created_at,id LIMIT 1)
+    AND status='queued' RETURNING *`).get(workerId, options.accountId ?? null, now, now, options.jobId ?? null, options.jobId ?? null) ?? null;
 }
 function finish(db: DatabaseSync, id: string, workerId: string, status: JobStatus, error: string | null) {
   const now = new Date().toISOString();

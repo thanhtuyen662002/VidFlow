@@ -8,6 +8,8 @@ import type { FlowJobDriver, WorkerJob } from './jobDriver.ts';
 export function createScheduler(options: {
   queue: DatabaseSync; accounts: DatabaseSync; driver: FlowJobDriver;
   logger?: (event: unknown) => void; clock?: () => Date; timeoutMs?: number; maxAttempts?: number;
+  /** M6 motion coordinator checks approval, dependencies and budget before claim. */
+  motion?: { canDispatch(job: WorkerJob): boolean; driver: FlowJobDriver };
 }) {
   const { queue: db, accounts, driver } = options;
   const worker = randomUUID();
@@ -18,14 +20,20 @@ export function createScheduler(options: {
     if (busy) return 'busy';
     busy = true;
     try {
-      if (!listJobs(db, { status: 'queued' }).length) return 'idle';
+      const candidate = listJobs(db, { status: 'queued' }).find(row => {
+        const payload = JSON.parse(String(row.payload));
+        if (payload?.internalMotionStep) return false;
+        if (payload?.kind !== 'motion') return true;
+        return options.motion?.canDispatch(row as unknown as WorkerJob) === true;
+      });
+      if (!candidate) return 'idle';
       const account = selectUsableAccount(accounts);
       if (!account) return 'no_account';
-      const row = claimNextJob(db, worker, { accountId: account.id });
+      const row = claimNextJob(db, worker, { accountId: account.id, jobId: String(candidate.id) });
       if (!row) return 'idle';
       const job = row as unknown as WorkerJob;
       let result;
-      try { result = await driver.run(job, account, { timeoutMs }); }
+      try { result = await (JSON.parse(job.payload)?.kind === 'motion' ? options.motion!.driver : driver).run(job, account, { timeoutMs }); }
       catch { result = { kind: 'transient_error' as const, message: 'Lỗi trình điều khiển Flow' }; }
       const current = getJob(db, job.id);
       if (current?.status !== 'running' || current.worker_id !== worker || current.account_id !== account.id) return 'processed';

@@ -12,7 +12,9 @@ import { motionRoles, motionSelectorNames } from '../selectors.ts';
 export const FAKE_FLOW_PRICES = { videoEdit: 12, frameImage: 2 } as const;
 /** Pixel coordinates on the 320x240 fixture, shared with M10.6. */
 export const FAKE_FLOW_WATERMARK = { x: 272, y: 216, width: 40, height: 16 } as const;
-const watermarkFilter = `drawbox=x=${FAKE_FLOW_WATERMARK.x}:y=${FAKE_FLOW_WATERMARK.y}:w=${FAKE_FLOW_WATERMARK.width}:h=${FAKE_FLOW_WATERMARK.height}:color=white:t=fill`;
+/** Separate AI marker retained by logo-only cropping; legacy white marker is the Flow logo. */
+export const FAKE_FLOW_AI_WATERMARK = { x: 8, y: 8, width: 24, height: 12 } as const;
+const watermarkFilter = `drawbox=x=${FAKE_FLOW_WATERMARK.x}:y=${FAKE_FLOW_WATERMARK.y}:w=${FAKE_FLOW_WATERMARK.width}:h=${FAKE_FLOW_WATERMARK.height}:color=white:t=fill,drawbox=x=${FAKE_FLOW_AI_WATERMARK.x}:y=${FAKE_FLOW_AI_WATERMARK.y}:w=${FAKE_FLOW_AI_WATERMARK.width}:h=${FAKE_FLOW_AI_WATERMARK.height}:color=magenta:t=fill`;
 
 export const FAKE_FLOW_SELECTORS = Object.fromEntries(
   ['login-email', 'login-submit', 'prompt-input', 'image-input', 'generate-button', 'credit-balance',

@@ -19,6 +19,10 @@ export type Scene = { id: string; projectId: string; scriptVariantId: string | n
 export type Chain = { id: string; projectId: string; scriptVariantId: string | null; name: string; status: string; createdAt: string };
 export type RenderJob = { id: string; projectId: string; sceneId: string; accountId: string | null; provider: string; type: string; model: string; prompt: string; inputImages: string[]; status: RenderJobStatus; credits: number; error: string | null; attempts: number; paramsJson: Record<string, unknown>; createdAt: string; updatedAt: string };
 export type Take = { id: string; renderJobId: string; sceneId: string; assetId: string | null; file: string; metadata: Record<string, unknown>; qualityScore: number | null; selected: boolean; durationSec: number; createdAt: string };
+export type MotionRenderJob = Omit<RenderJob, 'type' | 'sceneId' | 'status'> & {
+  type: 'motion'; sourceSegmentId: string; sceneId: number; segmentOrder: number;
+  compiledCommandReference: string; status: 'queued' | 'running' | 'done' | 'rejected' | 'failed';
+};
 export type Selection = { id: string; sceneId: string; takeId: string; in: number; out: number; crop: Record<string, unknown>; exitFrame: string | null; isCurrent: boolean; createdAt: string };
 export type ChainScene = { chainId: string; sceneId: string; position: number };
 

@@ -13,6 +13,7 @@ export interface StyleApproval {
   source_video_id: string; preset_id: string; preset_hash: string; input_hash: string;
   summary: string; credit_estimate: number | null; status: 'pending' | 'approved' | 'rejected';
   approved_by: string | null; approved_at: string | null; created_at: string;
+  approvedWithVisualPreview?: boolean;
 }
 export class MotionStyleService {
   private db: DatabaseSync;
@@ -45,7 +46,9 @@ export class MotionStyleService {
     // Include raw analysis/mappings as well as output: even a non-prompt edit requires renewed review.
     return { presetHash: configHash(preset), inputHash: configHash({ analysis,mapping,bible,preset,pricing: config.pricing }),
       estimate, summary: JSON.stringify({ kind: 'text-preview', prompts, creditEstimate: estimate,
-        variants: config.pricing.variants, visualPreview: { status: 'awaiting-M10.5', segmentIds: segments.slice(0,3).map(s => s.id) } }) };
+        variants: config.pricing.variants, segmentEstimates: segments.map(s => ({ segmentId: s.id,
+          credits: estimateMotionCredits([s], config.pricing) })),
+        visualPreview: { status: 'awaiting-M10.5', segmentIds: segments.slice(0,3).map(s => s.id) } }) };
   }
   createStylePreview(sourceVideoId: string, presetKey: string): StyleApproval {
     const value = this.build(sourceVideoId,presetKey);
@@ -57,7 +60,8 @@ export class MotionStyleService {
     return this.row(sourceVideoId)!;
   }
   private row(id: string): StyleApproval | undefined {
-    return this.db.prepare('SELECT * FROM motion_style_approvals WHERE source_video_id=?').get(id) as unknown as StyleApproval | undefined;
+    const row = this.db.prepare('SELECT * FROM motion_style_approvals WHERE source_video_id=?').get(id) as unknown as StyleApproval | undefined;
+    return row ? { ...row, approvedWithVisualPreview: JSON.parse(row.summary).approvedWithVisualPreview === true } : undefined;
   }
   getStyleApproval(id: string): StyleApproval | undefined {
     const row = this.row(id);
@@ -78,6 +82,9 @@ export class MotionStyleService {
     const row = this.getStyleApproval(sourceVideoId);
     if (!row || row.credit_estimate === null) throw new Error('Current preview and credit estimate required before approval');
     if (row.status !== 'pending') throw new Error('Style preview is not pending');
+    const summary = JSON.parse(row.summary);
+    summary.approvedWithVisualPreview = summary.visualPreview?.status === 'ready';
+    this.db.prepare('UPDATE motion_style_approvals SET summary=? WHERE source_video_id=?').run(JSON.stringify(summary), sourceVideoId);
     this.db.prepare("UPDATE motion_style_approvals SET status='approved',approved_by=?,approved_at=? WHERE source_video_id=?")
       .run(approver,new Date().toISOString(),sourceVideoId);
     return this.row(sourceVideoId)!;

@@ -18,6 +18,8 @@ import { generateValidated } from '../script/llm/generate.ts';
 import { buildStartFrame, markNextFrameDirty, saveStartFrame } from './frameChain.ts';
 import { recoverInterruptedJobs } from './recovery.ts';
 import { canDispatch, AWAITING_BUDGET_APPROVAL } from './budget.ts';
+export { enqueueMotionJobs, createMotionDispatcher, motionCoordinator, selectVariant,
+  getMotionState, approveMotionBudget, approveMotionRerender, completeVisualPreview } from '../motion/render.ts';
 
 export type ReviewTake = { id: string; file: string; duration: number; startedAt: string; finishedAt: string };
 export type TakeSelection = { takeId: string; inPoint: number; outPoint: number };

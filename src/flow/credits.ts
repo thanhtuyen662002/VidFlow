@@ -17,13 +17,14 @@ export function listEntries(db: DatabaseSync, accountId: string) {
 }
 
 /** The queue job ID is the idempotency key; serialize the check and append. */
-export function chargeJob(db: DatabaseSync, accountId: string, jobId: string, credits: number) {
+export function chargeJob(db: DatabaseSync, accountId: string, jobId: string, credits: number, outputFiles?: string[]) {
   if (!Number.isSafeInteger(credits) || credits < 0) throw new Error('Invalid charge');
   db.exec('BEGIN IMMEDIATE');
   try {
     const previous = db.prepare('SELECT * FROM credit_ledger WHERE job_id=? AND amount IS NOT NULL').get(jobId);
     if (previous && previous.account_id !== accountId) throw new Error('Job already charged to another account');
     const entry = previous ?? addEntry(db, { accountId, jobId, amount: -credits, reason: 'Flow generation' });
+    if (outputFiles) db.prepare('UPDATE render_jobs SET output_media=? WHERE id=?').run(JSON.stringify(outputFiles), jobId);
     db.exec('COMMIT');
     return entry;
   } catch (error) { db.exec('ROLLBACK'); throw error; }

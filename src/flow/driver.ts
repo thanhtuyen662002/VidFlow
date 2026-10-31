@@ -195,7 +195,7 @@ async function runMotion(job: VideoEditJob | FrameImageJob, ctx: FlowDriverConte
           renameSync(files[i] + '.partial', files[i]);
         }
         const creditsAfter = await r.credits(); const creditsCharged = creditsBefore - creditsAfter;
-        chargeJob(ctx.db, job.accountId, job.id, creditsCharged);
+        chargeJob(ctx.db, job.accountId, job.id, creditsCharged, files);
         return { kind: 'completed', files, creditsBefore, creditsAfter, creditsCharged, durationMs: Date.now() - started, accountId: job.accountId };
       }
       await new Promise(resolve => setTimeout(resolve, 50));
