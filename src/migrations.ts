@@ -243,6 +243,26 @@ CREATE TABLE music_tracks (
  has_license INTEGER NOT NULL DEFAULT 0 CHECK(has_license IN (0,1)),
  license_source TEXT NOT NULL DEFAULT '', attribution TEXT NOT NULL DEFAULT ''
 );
+` }, { version: 16, name: 'Source videos and scene segments', sql: `
+CREATE TABLE source_videos (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+ original_path TEXT NOT NULL, stored_path TEXT NOT NULL, sha256 TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL, duration_sec REAL NOT NULL CHECK(duration_sec>0),
+ fps REAL NOT NULL CHECK(fps>0), width INTEGER NOT NULL, height INTEGER NOT NULL,
+ has_audio INTEGER NOT NULL CHECK(has_audio IN (0,1)), audio_path TEXT,
+ rights_confirmed INTEGER NOT NULL CHECK(rights_confirmed=1), rights_confirmed_at TEXT NOT NULL,
+ scene_threshold REAL NOT NULL, max_segment_sec REAL NOT NULL, min_scene_sec REAL NOT NULL,
+ owner_cuts TEXT, created_at TEXT NOT NULL, UNIQUE(project_id,sha256), UNIQUE(project_id,stored_path)
+);
+CREATE TABLE source_segments (
+ id TEXT PRIMARY KEY, source_video_id TEXT NOT NULL REFERENCES source_videos(id) ON DELETE CASCADE,
+ idx INTEGER NOT NULL, scene_index INTEGER NOT NULL, start_sec REAL NOT NULL, end_sec REAL NOT NULL,
+ start_frame INTEGER NOT NULL, end_frame INTEGER NOT NULL, frame_count INTEGER NOT NULL,
+ origin TEXT NOT NULL CHECK(origin IN ('auto','split','owner')),
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+ CHECK(end_sec>start_sec), CHECK(end_frame>start_frame), UNIQUE(source_video_id,idx)
+);
+CREATE INDEX source_videos_project ON source_videos(project_id);
 ` }];
 
 export const latestVersion = migrations.at(-1)!.version;
