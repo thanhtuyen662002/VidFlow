@@ -121,6 +121,13 @@ test('service-only project to package flow, every command returns safe data', as
   await run('render.decideRedo', { requestId: rework.id, accept: false });
   await run('storyboard.reject', { storyboardId: board.id });
   await run('storyboard.approve', { storyboardId: board.id });
+  writeFileSync(join(p.directory, 'refs', 'series.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9XkAAAAASUVORK5CYII=', 'base64'));
+  db.prepare('UPDATE "references" SET images=? WHERE project_id=?').run(JSON.stringify(['refs/series.png']), p.id);
+  const template = await run<{ id: string }>('template.save', { projectId: p.id, name: 'Series' });
+  await run('template.list', {});
+  await run('template.get', { id: template.id });
+  await run('template.createProject', { templateId: template.id, name: 'Series episode' });
+  await run('template.delete', { id: template.id });
   assert.deepEqual([...called].sort(), service.listCommands().map(c => c.name).sort());
   await run('bible.update', { projectId: p.id, fields: { style: 'Changed lighting' } });
   const stale = await service.execute('render.run', { planId: plan.id, storyboardId: board.id });

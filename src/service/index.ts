@@ -1,4 +1,5 @@
 import { getScriptGate, skipScriptGate } from '../script/gate.ts';
+import { saveProjectAsTemplate, createProjectFromTemplate, listTemplates, getTemplate, deleteTemplate } from '../repo/templates.ts';
 import { createProgressSource } from './progress.ts';
 import type { DatabaseSync } from 'node:sqlite';
 import type { LlmClient } from '../script/llm/types.ts';
@@ -110,6 +111,11 @@ export function createCoreService(deps: ServiceDependencies) {
     return value;
   }
   const project = (id: string) => need(getProject(db, id));
+  register<{ projectId: string; name: string }>('template.save', object({ projectId: text, name: text }), identified, i => saveProjectAsTemplate(db, i.projectId, i));
+  register<{ templateId: string; name: string }>('template.createProject', object({ templateId: text, name: text }), projectSchema, i => createProjectFromTemplate(db, i.templateId, i));
+  register('template.list', object({}), array(identified), () => listTemplates());
+  register<{ id: string }>('template.get', object({ id: text }), identified, i => getTemplate(i.id));
+  register<{ id: string }>('template.delete', object({ id: text }), { type: 'boolean' }, i => deleteTemplate(i.id));
   register<{ projectId: string; timelineId: string; csvPath: string }>('analytics.import', object({ projectId: text, timelineId: text, csvPath: text }), output({}), i => importAnalyticsCsv(db, i.projectId, i.timelineId, i.csvPath));
   register<{ projectId: string }>('analytics.list', projectInput, array(output({})), i => { project(i.projectId); return listProposals(db, i.projectId); });
   register<{ id: string }>('analytics.accept', object({ id: text }), output({}), i => acceptProposal(db, i.id));

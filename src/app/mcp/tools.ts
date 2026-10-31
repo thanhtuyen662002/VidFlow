@@ -1,6 +1,7 @@
 import type { Services } from '../ipc.ts';
 
 const descriptions: Record<string, string> = {
+  template: 'Lưu và quản lý mẫu series, tạo dự án từ mẫu',
   analytics: 'Import owner-provided CSV retention data, list pending weight proposals, accept or reject them; only accept changes active weights',
   project: 'Quản lý dự án', reference: 'Quản lý tham chiếu', bible: 'Cập nhật Bible',
   script: 'Soạn và duyệt kịch bản', storyboard: 'Tạo và duyệt storyboard', render: 'Điều phối render',

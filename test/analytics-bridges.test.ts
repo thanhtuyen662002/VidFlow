@@ -8,10 +8,10 @@ import { createMcpTools } from '../src/app/mcp/tools.ts';
 import { createMcpServer } from '../src/app/mcp/server.ts';
 import type { VidflowApi } from '../src/app/api.ts';
 
-test('sandbox preload, IPC and MCP expose all 50 registry commands including analytics', async t => {
+test('sandbox preload, IPC and MCP expose all registry commands including analytics and templates', async t => {
   const { service } = setup(t);
   const expected = service.listCommands().map(c => c.name).sort();
-  assert.equal(expected.length, 50);
+  assert.ok(expected.includes('template.save'));
   const source = readFileSync(new URL('../src/app/preload.cjs', import.meta.url), 'utf8');
   const channels = [...new Set([...source.matchAll(/(?:invoke|unwrap)\('([\w]+:[\w]+)'/g)].map(m => m[1]))];
   assert.deepEqual(channels.map(c => c.replace(':', '.')).sort(), expected);
@@ -79,7 +79,7 @@ test('MCP HTTP lists all registry commands and safely calls every analytics comm
     return body.result;
   };
   const listed = await rpc('tools/list');
-  assert.equal(listed.tools.length, 50);
+  assert.equal(listed.tools.length, service.listCommands().length);
   assert.deepEqual(listed.tools.map((tool: { name: string }) => tool.name.replace('_', '.')).sort(), service.listCommands().map(c => c.name).sort());
   for (const method of ['accept', 'import', 'list', 'reject']) {
     const result = await rpc('tools/call', { name: `analytics_${method}` });

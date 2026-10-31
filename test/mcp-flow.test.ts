@@ -10,7 +10,7 @@ import type { TestContext } from 'node:test';
 import { setup as setupCore } from './service-fixture.ts';
 function setup(t: TestContext) {
   const { db, deps, service: core } = setupCore(t);
-  assert.equal(core.listCommands().length, 50);
+  assert.equal(core.listCommands().length, 55);
   const server = createMcpServer({ services: core, getSettings: () => ({ mcp: { enabled: true, port: 0, token: 'MCP_PRIVATE_VALUE' } }) });
   const started = server.start().then(async address => {
     const response = await fetch('http://127.0.0.1:' + address.port + '/mcp', { method: 'POST', headers: { authorization: 'Bearer MCP_PRIVATE_VALUE', 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
@@ -155,6 +155,15 @@ test('MCP HTTP: service-only project to package flow, every command returns safe
   await run('render.decideRedo', { requestId: rework.id, accept: false });
   await run('storyboard.reject', { storyboardId: board.id });
   await run('storyboard.approve', { storyboardId: board.id });
+  const templateImage = join(p.directory, 'refs', 'series.png');
+  writeFileSync(templateImage, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9XkAAAAASUVORK5CYII=', 'base64'));
+  // The existing workflow uses placeholder image bytes; templates require real images.
+  db.prepare('UPDATE "references" SET images=? WHERE project_id=?').run(JSON.stringify(['refs/series.png']), p.id);
+  const template = await run<{ id: string }>('template.save', { projectId: p.id, name: 'Series' });
+  await run('template.list', {});
+  await run('template.get', { id: template.id });
+  await run('template.createProject', { templateId: template.id, name: 'Series episode' });
+  await run('template.delete', { id: template.id });
   assert.deepEqual([...called].sort(), service.listCommands().map(c => c.name).sort());
   await run('bible.update', { projectId: p.id, fields: { style: 'Changed lighting' } });
   const stale = await service.execute('render.run', { planId: plan.id, storyboardId: board.id });

@@ -2,6 +2,13 @@ import type { createIpcHandlers } from './ipc.ts';
 import type { RenderProgress } from '../service/progress.ts';
 type Result = Awaited<ReturnType<ReturnType<typeof createIpcHandlers>['handleInvoke']>>;
 export interface LegacyApi {
+  template: {
+    save(input: { projectId: string; name: string }): Promise<Result>;
+    createProject(input: { templateId: string; name: string }): Promise<Result>;
+    list(input: Record<string, never>): Promise<Result>;
+    get(input: { id: string }): Promise<Result>;
+    delete(input: { id: string }): Promise<Result>;
+  };
   analytics: {
     import(input: { projectId: string; timelineId: string; csvPath: string }): Promise<Result>;
     list(input: { projectId: string }): Promise<Result>;
