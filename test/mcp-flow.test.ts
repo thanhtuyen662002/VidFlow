@@ -11,7 +11,7 @@ import type { TestContext } from 'node:test';
 import { setup as setupCore } from './service-fixture.ts';
 function setup(t: TestContext) {
   const { db, deps, service: core } = setupCore(t);
-  assert.equal(core.listCommands().length, 59);
+  assert.equal(core.listCommands().length, 74);
   const server = createMcpServer({ services: core, getSettings: () => ({ mcp: { enabled: true, port: 0, token: 'MCP_PRIVATE_VALUE' } }) });
   const started = server.start().then(async address => {
     const response = await fetch('http://127.0.0.1:' + address.port + '/mcp', { method: 'POST', headers: { authorization: 'Bearer MCP_PRIVATE_VALUE', 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
@@ -172,7 +172,8 @@ test('MCP HTTP: service-only project to package flow, every command returns safe
   t.after(() => rmSync(targetDir, { recursive: true, force: true }));
   const restored = await run<{ files: { path: string }[] }>('archive.restore', { file: 'workflow.vfb', targetDir });
   assert.ok(restored.files.some(file => file.path === 'vidflow.db'));
-  assert.deepEqual([...called].sort(), service.listCommands().map(c => c.name).sort());
+  // Motion tools have a separate full HTTP workflow in motion-mcp.test.ts.
+  assert.deepEqual([...called].sort(), service.listCommands().filter(c => !c.name.startsWith('motion.')).map(c => c.name).sort());
   await run('bible.update', { projectId: p.id, fields: { style: 'Changed lighting' } });
   const stale = await service.execute('render.run', { planId: plan.id, storyboardId: board.id });
   assert.equal(stale.ok, false); if (!stale.ok) assert.equal(stale.error.code, 'PRECONDITION_FAILED');

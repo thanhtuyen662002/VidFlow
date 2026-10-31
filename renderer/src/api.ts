@@ -14,6 +14,7 @@ export type Gate = {
   blockingReasons?: string[];
 };
 export interface VidFlowApi {
+  motion?: Record<string, (input: Record<string, unknown>) => Promise<unknown>>;
   projects: { list(): Promise<Project[]>; create(input: { name: string }): Promise<Project> };
   bible: { get(projectId: string): Promise<Bible>; update(projectId: string, patch: Partial<Bible>): Promise<Bible> };
   references: { list(projectId: string): Promise<Reference[]>; add(projectId: string, input: ReferenceInput): Promise<Reference>; remove(projectId: string, refId: string): Promise<void> };

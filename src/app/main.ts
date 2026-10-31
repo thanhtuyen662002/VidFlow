@@ -11,6 +11,7 @@ import { createUpdater } from './updater.ts';
 import { withUpdates } from './update-service.ts';
 import { dataDirectory, resolveInside } from '../paths.ts';
 import { spawn } from 'node:child_process';
+import { browserMotion } from '../motion/runtime.ts';
 
 export function getSecureWebPreferences() {
   return { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,
@@ -27,7 +28,7 @@ export async function startElectron(services?: Services & ProgressSource & { mcp
     ]);
     const db = openDatabase();
     app.once('will-quit', () => db.close());
-    services = createCoreService({ db,
+    services = createCoreService({ db, motion: browserMotion(db),
       llm: { complete: request => configuredLlm().complete(request) },
       flowDriver: createPageDriver(async accountId => ({ db, browser: await launchFlowContext(accountId),
         url: 'https://labs.google/fx/tools/flow', timeoutMs: 30000 })),

@@ -10,6 +10,10 @@ import { JSDOM } from 'jsdom';
 import { build } from 'vite';
 import { mockApi } from './mockApi.ts';
 import { workflowFake } from './workflowFake.ts';
+import { motionControlFixture } from '../motion-control-fixture.ts';
+import { browserAvailable, BROWSER_SKIP_REASON } from '../support/browser.ts';
+import { detectFfmpeg } from '../helpers/media.ts';
+import { createIpcHandlers } from '../../src/app/ipc.ts';
 
 let folder: string;
 let App: any;
@@ -69,8 +73,8 @@ async function mount(api?: ReturnType<typeof mockApi>) {
   // Flush the mount effects' API promises before callers query the project list.
   await act(async () => {});
 }
-async function waitFor<T>(read: () => T | undefined | null): Promise<T> {
-  const deadline = Date.now() + 2000;
+async function waitFor<T>(read: () => T | undefined | null, timeout = 2000): Promise<T> {
+  const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     let value: T | undefined | null;
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); value = read(); });
@@ -88,6 +92,49 @@ async function fill(label: string, value: string) {
   const prototype = element.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype;
   await act(async () => { Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(element, value); element.dispatchEvent(new dom.window.Event('input', { bubbles: true })); element.dispatchEvent(new dom.window.Event('change', { bubbles: true })); });
 }
+
+test('M10.7 UI: import, segment, map, style approval, render, select and export using fake Flow and LLM', { skip: !browserAvailable ? BROWSER_SKIP_REASON : !detectFfmpeg().available ? 'ffmpeg/ffprobe unavailable' : false }, async t => {
+  const f = await motionControlFixture(t);
+  const ipc = createIpcHandlers(f.service);
+  const api = mockApi() as ReturnType<typeof mockApi> & { motion: Record<string, (input: unknown) => Promise<unknown>> };
+  api.projects.list.mock.mockImplementation(async () => [f.project]);
+  const calls: string[] = [];
+  api.motion = Object.fromEntries(f.service.listCommands().filter(c => c.name.startsWith('motion.')).map(c => {
+    const action = c.name.slice(7);
+    return [action, async (input: unknown) => {
+      calls.push(action);
+      const result = await ipc.handleInvoke('motion:' + action, input);
+      if (!result.ok) throw new Error(result.error.message);
+      return result.data;
+    }];
+  }));
+  await mount(api); await click(f.project.name);
+  await fill('Đường dẫn video', f.filePath);
+  assert.equal((await button('Nhập video')).disabled, true);
+  const checkbox = [...document.querySelectorAll('label')].find(l => l.textContent === 'Tôi có quyền sử dụng video này')!.querySelector('input')!;
+  await act(async () => checkbox.click());
+  await click('Nhập video');
+  await waitFor(() => !(document.querySelector('section[aria-label="Điều khiển chuyển động"] [role="status"]')), 120000);
+  await click('Tách đoạn');
+  await waitFor(() => !(document.querySelector('section[aria-label="Điều khiển chuyển động"] [role="status"]')), 120000);
+  await click('Phân tích chủ thể');
+  const subjects = await waitFor(() => { const buttons = [...document.querySelectorAll('button')].filter(b => b.textContent?.startsWith('Chọn chủ thể ')); return buttons.length === 4 ? buttons.map(b => b.textContent!) : undefined; }, 120000);
+  for (const subject of subjects) {
+    await click(subject);
+    await fill('Tham chiếu @Tên, giữ nguyên hoặc không lộ mặt', 'không lộ mặt');
+    await click('Lưu ánh xạ');
+  }
+  await fill('Mã phong cách', 'cartoon_faceless'); await click('Chọn phong cách');
+  assert.match(document.body.textContent!, /Ước tính credit:/);
+  await fill('Mã tài khoản', f.accountId); await click('Xem trước phong cách');
+  await waitFor(() => document.querySelector('img[alt="Khung hình theo phong cách mới"]'), 120000);
+  await click('Duyệt phong cách'); await click('Render video');
+  await waitFor(() => document.body.textContent?.includes('Hoàn tất'), 120000);
+  await click('Chọn đoạn 1'); await click('Bản 1'); await click('Chọn bản');
+  await click('Xuất video');
+  await waitFor(() => document.body.textContent?.includes('Đã xuất video:'), 120000);
+  assert.deepEqual(calls, ['import','segment','analyze', ...subjects.map(() => 'map_subjects'), 'set_preset','style_preview','style_approve','render','select_take','export']);
+});
 test('tạo dự án và đọc lại danh sách', async () => {
   const api = mockApi(); await mount(api); await fill('Tên dự án', 'Phim mới'); await click('Tạo dự án');
   assert.deepEqual(api.projects.create.mock.calls[0].arguments, [{ name: 'Phim mới' }]); assert.ok(await button('Phim mới'));

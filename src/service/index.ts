@@ -1,4 +1,6 @@
 import { getScriptGate, skipScriptGate } from '../script/gate.ts';
+import { registerMotion } from './motion.ts';
+import type { MotionDependencies } from '../motion/render.ts';
 import { createMaintenanceService } from './maintenance.ts';
 import { saveProjectAsTemplate, createProjectFromTemplate, listTemplates, getTemplate, deleteTemplate } from '../repo/templates.ts';
 import { createProgressSource } from './progress.ts';
@@ -49,6 +51,7 @@ class ServiceError extends Error {
   constructor(code: ErrorCode, message: string) { super(message); this.code = code; }
 }
 export interface ServiceDependencies {
+  motion?: Omit<MotionDependencies, 'db' | 'style'>;
   db: DatabaseSync; llm: LlmClient; flowDriver: FlowJobDriver; clock?: () => Date; promptsDir?: string;
   reviewer?: TakeReviewer; duration?: (file: string) => Promise<number>;
   exitFrame?: Parameters<typeof runRenderPlan>[0]['exitFrame'];
@@ -111,6 +114,7 @@ export function createCoreService(deps: ServiceDependencies) {
     if (value == null) throw new ServiceError('NOT_FOUND', 'Requested record does not exist');
     return value;
   }
+  registerMotion(deps, register);
   const project = (id: string) => need(getProject(db, id));
   const maintenance = createMaintenanceService(db);
   register<{ file: string }>('archive.backup', object({ file: text }), output({}), i => maintenance.backup(i.file));

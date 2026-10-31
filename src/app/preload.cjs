@@ -12,6 +12,23 @@ async function unwrap(channel, input) {
 }
 /** @satisfies {import('./api.ts').VidflowApi} */
 const api = {
+motion: Object.freeze({
+  analyze: input => unwrap('motion:analyze', input),
+  export: input => unwrap('motion:export', input),
+  import: input => unwrap('motion:import', input),
+  list_segments: input => unwrap('motion:list_segments', input),
+  map_subjects: input => unwrap('motion:map_subjects', input),
+  presets: input => unwrap('motion:presets', input),
+  render: input => unwrap('motion:render', input),
+  segment: input => unwrap('motion:segment', input),
+  select_take: input => unwrap('motion:select_take', input),
+  set_preset: input => unwrap('motion:set_preset', input),
+  status: input => unwrap('motion:status', input),
+  style_approve: input => unwrap('motion:style_approve', input),
+  style_preview: input => unwrap('motion:style_preview', input),
+  style_reject: input => unwrap('motion:style_reject', input),
+  update_segment: input => unwrap('motion:update_segment', input)
+}),
 archive: Object.freeze({
   backup: input => ipcRenderer.invoke('archive:backup', input),
   restore: input => ipcRenderer.invoke('archive:restore', input)

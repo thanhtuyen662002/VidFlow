@@ -2,6 +2,7 @@
 import type { Bible, Gate, Project, Reference, VidflowApi } from './api.ts';
 import { getApi } from './api.ts';
 import { Workflow } from './Workflow.tsx';
+import { MotionControl } from './MotionControl.tsx';
 import { M9Panels } from './M9.tsx';
 import type { M9Api } from './M9.tsx';
 import type { WorkflowApi } from './workflow.ts';
@@ -66,7 +67,8 @@ function ProjectsView({ api }: { api: VidflowApi }) {
 function ProjectPanels({ api, projectId }: { api: VidflowApi; projectId: string }) {
   const [approvedVersion, setApprovedVersion] = useState<string>();
   const workflow = api as VidflowApi & Partial<WorkflowApi>;
-  return <div className="panels"><BibleView api={api} projectId={projectId} /><ReferencesView api={api} projectId={projectId} /><ScriptGateView api={api} projectId={projectId} onApproved={setApprovedVersion} />{workflow.storyboard && workflow.render && workflow.take && workflow.edit && workflow.account && workflow.queue && <Workflow api={workflow as WorkflowApi} projectId={projectId} approvedVersion={approvedVersion} />}</div>;
+  const motion = 'motion' in api ? <MotionControl projectId={projectId} /> : null;
+  return <div className="panels">{motion}<BibleView api={api} projectId={projectId} /><ReferencesView api={api} projectId={projectId} /><ScriptGateView api={api} projectId={projectId} onApproved={setApprovedVersion} />{workflow.storyboard && workflow.render && workflow.take && workflow.edit && workflow.account && workflow.queue && <Workflow api={workflow as WorkflowApi} projectId={projectId} approvedVersion={approvedVersion} />}</div>;
 }
 
 const bibleLabels: Record<keyof Bible, string> = { style: 'Phong cách', lighting: 'Ánh sáng', palette: 'Bảng màu', lens: 'Ống kính', avoid: 'Điều cần tránh', safe_area: 'Vùng an toàn' };

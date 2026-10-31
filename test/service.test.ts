@@ -136,7 +136,8 @@ test('service-only project to package flow, every command returns safe data', as
   t.after(() => rmSync(targetDir, { recursive: true, force: true }));
   const restored = await run<{ files: { path: string }[] }>('archive.restore', { file: 'workflow.vfb', targetDir });
   assert.ok(restored.files.some(file => file.path === 'vidflow.db'));
-  assert.deepEqual([...called].sort(), service.listCommands().map(c => c.name).sort());
+  // Motion commands are exercised through their public adapters in motion-mcp.test.ts.
+  assert.deepEqual([...called].sort(), service.listCommands().filter(c => !c.name.startsWith('motion.')).map(c => c.name).sort());
   await run('bible.update', { projectId: p.id, fields: { style: 'Changed lighting' } });
   const stale = await service.execute('render.run', { planId: plan.id, storyboardId: board.id });
   assert.equal(stale.ok, false); if (!stale.ok) assert.equal(stale.error.code, 'PRECONDITION_FAILED');

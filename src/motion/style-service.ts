@@ -89,6 +89,12 @@ export class MotionStyleService {
       .run(approver,new Date().toISOString(),sourceVideoId);
     return this.row(sourceVideoId)!;
   }
+  /** Persist an owner rejection; enqueue will continue to require approval. */
+  rejectStyle(sourceVideoId: string): StyleApproval {
+    if (!this.getStyleApproval(sourceVideoId)) throw new Error('Current preview required');
+    this.db.prepare("UPDATE motion_style_approvals SET status='rejected',approved_by=NULL,approved_at=NULL WHERE source_video_id=?").run(sourceVideoId);
+    return this.row(sourceVideoId)!;
+  }
   /** M10.5 must call immediately before queueing any motion render. */
   assertStyleApproved(sourceVideoId: string): void {
     if (this.getStyleApproval(sourceVideoId)?.status !== 'approved') throw new Error('Owner style approval required');

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { runRenderCommand } from './render/cli.ts';
+import { runMotionCommand } from './motion/cli.ts';
 import { runM9Command } from './service/m9-cli.ts';
 import { runEditCommand } from './edit/cli.ts';
 import { parseArgs } from 'node:util';
@@ -24,6 +25,7 @@ import { runFlowWorkerCommand } from './flow/workerCli.ts';
 
 type IO = { stdout: Pick<NodeJS.WriteStream, 'write'>; stderr: Pick<NodeJS.WriteStream, 'write'> };
 const usage = `Usage: vidflow init
+       vidflow motion --help (nhập video, tách đoạn, ánh xạ, phong cách, render, chọn bản, xuất)
        vidflow analytics|template|archive|takes|update --help (CSV, mẫu series, sao lưu, dọn take, cập nhật)
        vidflow timeline|export|package --help (dựng, xuất và gói xuất bản cục bộ)
        vidflow render --help (lập kế hoạch, chạy, trạng thái, take, in/out, ngân sách, làm lại)
@@ -49,6 +51,7 @@ function details(project: Project): string {
 }
 
 export function run(argv: string[], io: IO = process): number | Promise<number> {
+  if (argv[0] === 'motion') return runMotionCommand(argv.slice(1), io);
   if (['analytics', 'template', 'archive', 'takes', 'update', 'csv', 'suggestions', 'backup', 'restore', 'cleanup-takes', 'check-update'].includes(argv[0])) return runM9Command(argv, io);
   if (['timeline', 'export', 'package'].includes(argv[0])) return runEditCommand(argv[0], argv.slice(1), io);
   if (argv[0] === 'render') return runRenderCommand(argv.slice(1), io);
