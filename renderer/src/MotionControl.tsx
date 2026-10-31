@@ -30,11 +30,11 @@ export function MotionControl({ projectId }: { projectId: string }) {
   try { preview = data?.summary ? JSON.parse(data.summary).visualPreview : undefined; } catch {}
   const imageUrl = (path: string) => 'file:///' + path.replaceAll('\\', '/').replace(/^\//, '');
   const labels: Record<string, string> = { pending: 'Đang chờ', rendering: 'Đang render', done: 'Hoàn tất', awaiting_budget_approval: 'Chờ duyệt ngân sách', needs_rerender: 'Cần duyệt render lại' };
-  return <section aria-label="Điều khiển chuyển động"><h2>Điều khiển chuyển động</h2>
-    {error && <p role="alert">{error}</p>}{busy && <p role="status">Đang xử lý</p>}
-    <fieldset><legend>Nhập video</legend><label>Đường dẫn video<input value={filePath} onChange={e => setFile(e.target.value)} /></label>
-      <label><input type="checkbox" checked={rights} onChange={e => setRights(e.target.checked)} />Tôi có quyền sử dụng video này</label>
-      <button disabled={busy || !rights || !filePath} onClick={() => void call('import', { projectId, filePath, rights_confirmed: rights })}>Nhập video</button>
+  return <section aria-label="Điều khiển chuyển động" className="motion"><header className="card-head"><h2>Điều khiển chuyển động</h2><p>Lấy chuyển động từ một video có sẵn và dựng lại bằng nhân vật, phong cách của bạn.</p></header>
+    {error && <p role="alert">{error}</p>}{busy && <p role="status" className="loading">Đang xử lý</p>}
+    <div className="motion-steps"><fieldset><legend>Nhập video</legend><label>Đường dẫn video<input value={filePath} onChange={e => setFile(e.target.value)} /></label>
+      <label className="check"><input type="checkbox" checked={rights} onChange={e => setRights(e.target.checked)} />Tôi có quyền sử dụng video này</label>
+      <button className="primary" disabled={busy || !rights || !filePath} onClick={() => void call('import', { projectId, filePath, rights_confirmed: rights })}>Nhập video</button>
       <label>Mã video<input value={sourceVideoId} onChange={e => setSource(e.target.value)} /></label></fieldset>
     <fieldset><legend>Xem và sửa đoạn</legend>{button('Tách đoạn', 'segment')}{button('Xem các đoạn', 'list_segments')}
       <label>Điểm cắt (mảng giây)<input value={cuts} onChange={e => setCuts(e.target.value)} /></label>
@@ -58,7 +58,7 @@ export function MotionControl({ projectId }: { projectId: string }) {
       {segments.map((s: any) => <article key={s.id}><p>Đoạn {s.idx + 1}: {s.start_sec} – {s.end_sec} giây. {labels[s.state?.status] ?? 'Chưa render'}</p><button onClick={() => setSegment(s.id)}>Chọn đoạn {s.idx + 1}</button>
         {s.state?.variants.map((v: any, i: number) => <button key={v.id} onClick={() => { setSegment(s.id); setVariant(v.id); }}>Bản {i + 1}</button>)}</article>)}</fieldset>
     <fieldset><legend>Chọn bản và xuất</legend><label>Mã đoạn<input value={segmentId} onChange={e => setSegment(e.target.value)} /></label>
-      <label>Mã bản<input value={variantId} onChange={e => setVariant(e.target.value)} /></label>{button('Chọn bản', 'select_take', { segmentId, variantId })}{button('Xuất video', 'export')}</fieldset>
-    {data?.path && <p>Đã xuất video: {data.path}</p>}
+      <label>Mã bản<input value={variantId} onChange={e => setVariant(e.target.value)} /></label>{button('Chọn bản', 'select_take', { segmentId, variantId })}{button('Xuất video', 'export')}</fieldset></div>
+    {data?.path && <p className="result">Đã xuất video: {data.path}</p>}
   </section>;
 }

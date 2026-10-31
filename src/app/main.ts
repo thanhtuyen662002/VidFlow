@@ -80,7 +80,12 @@ export async function startElectron(services?: Services & ProgressSource & { mcp
     return [...windows].some(w => !w.isDestroyed() && e.sender === w.webContents && e.senderFrame === w.webContents.mainFrame && trusted(e.senderFrame.url));
   });
   function createWindow() {
-    const window = new BrowserWindow({ width: 1280, height: 800, webPreferences: getSecureWebPreferences() });
+    // The app header is the title bar: no native frame or menu. On Windows and Linux the system draws
+    // minimize/maximize/close over the header's right end (renderer .topbar reserves that area).
+    const window = new BrowserWindow({ width: 1360, height: 860, minWidth: 980, minHeight: 640, backgroundColor: '#f4f5f9',
+      ...(process.platform === 'darwin' ? {} : { titleBarStyle: 'hidden' as const, titleBarOverlay: { color: '#f4f5f9', symbolColor: '#5e6578', height: 44 } }),
+      webPreferences: getSecureWebPreferences() });
+    window.removeMenu();
     windows.add(window);
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, url) => { if (!trusted(url)) event.preventDefault(); });
